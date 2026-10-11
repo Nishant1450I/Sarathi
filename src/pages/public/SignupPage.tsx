@@ -3,8 +3,10 @@ import { Link, useNavigate } from 'react-router-dom';
 import { User, Mail, Lock, CheckCircle2, ArrowRight } from 'lucide-react';
 import { Logo } from '../../components/common/Logo';
 import { Button } from '../../components/common/Button';
+import { GoogleLoginButton } from '../../components/auth/GoogleLoginButton';
 import { useAuth } from '../../context/AuthContext';
 import type { UserRole } from '../../types/user';
+
 
 export const SignupPage: React.FC = () => {
   const [fullName, setFullName] = useState('');
@@ -95,6 +97,21 @@ export const SignupPage: React.FC = () => {
               {error}
             </div>
           )}
+
+          {/* Google Sign-Up Button */}
+          <div className="space-y-4">
+            <GoogleLoginButton
+              role={role}
+              text={`Sign up with Google as ${role === 'recruiter' ? 'Recruiter' : 'Student'}`}
+            />
+
+            <div className="relative flex items-center justify-center">
+              <div className="w-full border-t border-gray-200"></div>
+              <span className="bg-white px-3 text-xs text-gray-400 font-medium uppercase tracking-wider relative">
+                or sign up with email
+              </span>
+            </div>
+          </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Role selection */}

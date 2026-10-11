@@ -255,5 +255,106 @@ export const authService = {
         targetRole: candidate.target_role,
       }
     };
+  },
+
+  async getOrCreateGoogleSession({ email, fullName, avatarUrl, role = 'student' } = {}) {
+    if (!email) {
+      throw new Error('Email is required for Google login');
+    }
+    const cleanEmail = email.toLowerCase().trim();
+    const cleanName = (fullName || cleanEmail.split('@')[0].replace(/[._-]/g, ' ')).trim();
+    const mappedDbRole = role === 'recruiter' ? 'recruiter' : (role === 'college' ? 'college' : 'candidate');
+    const now = new Date().toISOString();
+
+    const result = repository.transaction((repo) => {
+      let existingUser = repo.queryOne(
+        'SELECT * FROM users WHERE email = ? AND deleted_at IS NULL;',
+        [cleanEmail]
+      );
+
+      let userId;
+      if (!existingUser) {
+        userId = `usr-google-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+        repo.execute(
+          `INSERT INTO users (id, email, full_name, role, avatar_url, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?);`,
+          [userId, cleanEmail, cleanName, mappedDbRole, avatarUrl || null, now, now]
+        );
+      } else {
+        userId = existingUser.id;
+        repo.execute(
+          `UPDATE users SET 
+            full_name = COALESCE(?, full_name),
+            avatar_url = COALESCE(?, avatar_url),
+            updated_at = ?
+           WHERE id = ?;`,
+          [cleanName, avatarUrl || null, now, userId]
+        );
+      }
+
+      const user = repo.queryOne('SELECT * FROM users WHERE id = ?;', [userId]);
+
+      if (user.role === 'candidate') {
+        const existingProfile = repo.queryOne('SELECT id FROM candidate_profiles WHERE id = ?;', [userId]);
+        if (!existingProfile) {
+          repo.execute(
+            `INSERT INTO candidate_profiles (
+              id, headline, target_role, bio, experience_years, location,
+              work_preference, visibility, created_at, updated_at
+            ) VALUES (?, 'Google User Candidate', 'Full-Stack Developer', 'Verified Google user profile.', 0, 'India', 'flexible', 'public', ?, ?);`,
+            [userId, now, now]
+          );
+        }
+        return { user, org: null };
+      } else if (user.role === 'recruiter') {
+        const existingProfile = repo.queryOne('SELECT user_id FROM recruiter_profiles WHERE user_id = ?;', [userId]);
+        if (!existingProfile) {
+          repo.execute(
+            `INSERT INTO recruiter_profiles (user_id, title, department, created_at, updated_at)
+             VALUES (?, 'Talent Partner', 'Engineering Hiring', ?, ?);`,
+            [userId, now, now]
+          );
+        }
+        const existingMembership = repo.queryOne(
+          "SELECT * FROM organisation_memberships WHERE user_id = ? AND status = 'active' LIMIT 1;",
+          [userId]
+        );
+        let membership = existingMembership;
+        if (!membership) {
+          const defaultOrg = repo.queryOne("SELECT id, name FROM organisations LIMIT 1;") || { id: 'org-demo-1', name: 'Sarathi Enterprise Systems' };
+          const memId = `mem-google-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+          repo.execute(
+            `INSERT INTO organisation_memberships (id, org_id, user_id, role, status, created_at, updated_at)
+             VALUES (?, ?, ?, 'recruiter', 'active', ?, ?);`,
+            [memId, defaultOrg.id, userId, now, now]
+          );
+          membership = { org_id: defaultOrg.id, role: 'recruiter', org_name: defaultOrg.name };
+        }
+        return { user, org: membership };
+      }
+
+      return { user, org: null };
+    });
+
+    const orgId = result.org?.org_id || null;
+    const orgRole = result.org?.role || (result.user.role === 'recruiter' ? 'recruiter' : null);
+    const token = this.generateToken(result.user, orgId, orgRole);
+
+    return {
+      token,
+      user: {
+        id: result.user.id,
+        email: result.user.email,
+        fullName: result.user.full_name,
+        role: result.user.role === 'candidate' ? 'student' : result.user.role,
+        avatarUrl: result.user.avatar_url,
+      },
+      organization: result.org ? {
+        id: result.org.org_id,
+        role: result.org.role,
+        name: result.org.org_name || 'Sarathi Enterprise Systems',
+      } : null,
+    };
   }
 };
+

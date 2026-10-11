@@ -4,8 +4,10 @@ import { Eye, EyeOff, CheckCircle2, ArrowRight, Sparkles, Lock, Mail } from 'luc
 import { Logo } from '../../components/common/Logo';
 import { Button } from '../../components/common/Button';
 import { Badge } from '../../components/common/Badge';
+import { GoogleLoginButton } from '../../components/auth/GoogleLoginButton';
 import { useAuth } from '../../context/AuthContext';
 import type { UserRole } from '../../types/user';
+
 
 export const LoginPage: React.FC = () => {
   const { login, isLoading, isDemo, loginAsNewStudent } = useAuth();
@@ -168,7 +170,23 @@ export const LoginPage: React.FC = () => {
             </div>
           )}
 
+          {/* Google Sign-In (Unrestricted for any user/account) */}
+          <div className="space-y-4">
+            <GoogleLoginButton
+              role={role}
+              text={`Continue with Google as ${role === 'recruiter' ? 'Recruiter' : 'Student'}`}
+            />
+
+            <div className="relative flex items-center justify-center">
+              <div className="w-full border-t border-gray-200"></div>
+              <span className="bg-white px-3 text-xs text-gray-400 font-medium uppercase tracking-wider relative">
+                or sign in with email
+              </span>
+            </div>
+          </div>
+
           <form onSubmit={handleSubmit} className="space-y-5">
+
             <div>
               <label className="block text-xs font-bold text-[#0B1B43] mb-1.5 uppercase tracking-wide">
                 Email Address

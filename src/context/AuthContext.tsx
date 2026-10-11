@@ -12,6 +12,7 @@ interface AuthContextType extends AuthState {
   token: string | null;
   activeOrgId?: string | null;
   login: (email: string, passwordOrRole?: string | UserRole, role?: UserRole) => Promise<void>;
+  loginWithGoogle: (googleData: { email: string; fullName?: string; avatarUrl?: string; role?: UserRole }) => Promise<void>;
   signup: (fullName: string, email: string, role: UserRole) => Promise<void>;
   updateProfile: (updates: Partial<UserProfile>) => Promise<void>;
   logout: () => void;
@@ -291,6 +292,48 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const loginWithGoogle = async (googleData: { email: string; fullName?: string; avatarUrl?: string; role?: UserRole }) => {
+    setIsLoading(true);
+    try {
+      const cleanEmail = googleData.email.toLowerCase().trim();
+      const targetRole = googleData.role || 'student';
+
+      const res = await fetch('/api/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: cleanEmail,
+          fullName: googleData.fullName,
+          avatarUrl: googleData.avatarUrl,
+          role: targetRole,
+        }),
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || 'Failed to authenticate with Google');
+      }
+
+      const data = await res.json();
+      const profile = mapBackendUserToProfile(data.user, data.organization);
+      setUser(profile);
+      setToken(data.token);
+      setActiveOrgId(data.organization?.id || null);
+
+      sessionStorage.setItem('sarathi_auth_token', data.token);
+      sessionStorage.setItem('sarathi_auth_user', JSON.stringify(profile));
+      sessionStorage.removeItem('sarathi_demo_college');
+
+      if (profile.role === 'recruiter') {
+        recruiterApi.setAuthToken(data.token, data.organization?.id);
+      } else if (profile.role === 'student') {
+        OpportunityService.setAuthToken(data.token);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -302,6 +345,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         token,
         activeOrgId,
         login,
+        loginWithGoogle,
         signup,
         updateProfile,
         logout,

@@ -30,9 +30,11 @@ const app = express();
 // CORS middleware
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  if (!origin || corsOrigins.includes(origin) || corsOrigins.includes('*')) {
+  const isDevOrDemo = appConfig.env !== 'production' || appConfig.mode === 'demo';
+  if (!origin || corsOrigins.includes(origin) || corsOrigins.includes('*') || isDevOrDemo) {
     res.setHeader('Access-Control-Allow-Origin', origin || '*');
   }
+
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-org-id');
   res.setHeader('Access-Control-Allow-Credentials', 'true');

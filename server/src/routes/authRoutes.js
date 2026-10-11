@@ -27,6 +27,25 @@ router.post('/login', async (req, res, next) => {
   }
 });
 
+router.post('/google', async (req, res, next) => {
+  try {
+    const { email, fullName, avatarUrl, role } = req.body || {};
+    if (!email) {
+      return res.status(400).json({ error: 'Google email is required' });
+    }
+    const result = await authService.getOrCreateGoogleSession({
+      email,
+      fullName,
+      avatarUrl,
+      role: role || 'student'
+    });
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+
 router.post('/student-session', async (req, res, next) => {
   try {
     if (!authConfig.enableDemoAuth || appConfig.env === 'production') {
