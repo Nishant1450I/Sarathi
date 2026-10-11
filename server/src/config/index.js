@@ -1,0 +1,79 @@
+import { fileURLToPath } from 'node:url';
+import { resolve, dirname } from 'node:path';
+
+// Resolve project root (server/ folder) regardless of the CWD the process was launched from.
+const __filename = fileURLToPath(import.meta.url);
+const root = resolve(dirname(__filename), '..', '..');
+
+try {
+  process.loadEnvFile?.(resolve(root, '.env'));
+} catch {
+  try {
+    process.loadEnvFile?.();
+  } catch {
+    // .env file is optional
+  }
+}
+
+export const app = {
+  port: Number(process.env.PORT || 4000),
+  host: process.env.HOST || '0.0.0.0',
+  env: process.env.NODE_ENV || 'development',
+  mode: process.env.APP_MODE || (process.env.NODE_ENV === 'production' ? 'production' : (process.env.ENABLE_DEMO_AUTH === 'true' ? 'demo' : 'development')),
+  origin: process.env.APP_ORIGIN || 'http://localhost:5173',
+};
+
+// Secret rotation is not supported here; rotate via restart.
+export const auth = {
+  secret: process.env.JWT_SECRET || (process.env.NODE_ENV === 'production' ? null : 'sarathi-dev-secret-change-me'),
+  expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+  enableDemoAuth: (process.env.ENABLE_DEMO_AUTH === 'true' || process.env.APP_MODE === 'demo') && process.env.NODE_ENV !== 'production' && process.env.APP_MODE !== 'production',
+};
+
+/**
+ * Validates critical environment configuration settings.
+ * Fails safely if unsafe demo settings or fallback secrets are detected in production.
+ */
+export function validateConfig(customConfig = null) {
+  const currentApp = customConfig?.app || (customConfig?.isProduction ? { env: 'production', mode: 'production' } : app);
+  const currentAuth = customConfig?.auth || auth;
+
+  const isProd = currentApp.env === 'production' || currentApp.mode === 'production' || customConfig?.isProduction;
+
+  if (isProd) {
+    if (currentAuth.enableDemoAuth) {
+      throw new Error(
+        'FATAL CONFIGURATION ERROR: Demo authentication (ENABLE_DEMO_AUTH=true) cannot be enabled in a production environment.'
+      );
+    }
+    if (!currentAuth.secret || currentAuth.secret === 'sarathi-dev-secret-change-me' || currentAuth.secret.includes('insecure') || currentAuth.secret.length < 32) {
+      throw new Error(
+        'FATAL CONFIGURATION ERROR: JWT_SECRET must be explicitly configured with a strong secret in a production environment (min 32 characters).'
+      );
+    }
+  }
+}
+
+// Default tenant scope (demo only). Real multi-tenancy requires a tenant header
+// that the client obtains after login.
+export const tenant = {
+  demoOrgId: 'org-demo-1',
+};
+
+// File-backing explicit data directory (created at startup).
+export const paths = {
+  dataDir: resolve(root, 'data'),
+  dbFile: resolve(root, 'data', 'database.db'),
+};
+
+export const corsOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173').split(',').map((u) => u.trim());
+
+export const rateLimit = {
+  windowMs: Number(process.env.RATE_LIMIT_WINDOW_MS || 60_000),
+  max: Number(process.env.RATE_LIMIT_MAX || 100),
+};
+
+export const audit = {
+  enabled: process.env.AUDIT_LOGGING !== 'false',
+  filePath: resolve(root, 'data', 'audit.jsonl'),
+};
