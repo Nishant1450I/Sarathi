@@ -4,7 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/dev.js",
+    "dev:frontend": "node ./node_modules/vite/bin/vite.js",
+    "dev:backend": "node server/src/index.js",
     "server": "node server/src/index.js",
     "test": "npm --prefix server test",
     "build": "tsc -b && vite build",

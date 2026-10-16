@@ -13,7 +13,7 @@ interface AuthContextType extends AuthState {
   activeOrgId?: string | null;
   login: (email: string, passwordOrRole?: string | UserRole, role?: UserRole) => Promise<void>;
   loginWithGoogle: (googleData: { email: string; fullName?: string; avatarUrl?: string; role?: UserRole }) => Promise<void>;
-  signup: (fullName: string, email: string, role: UserRole) => Promise<void>;
+  signup: (fullName: string, email: string, role: UserRole, password?: string) => Promise<void>;
   updateProfile: (updates: Partial<UserProfile>) => Promise<void>;
   logout: () => void;
   switchDemoRole: (role: UserRole) => Promise<void>;
@@ -187,11 +187,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         password = 'password123';
       }
 
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: cleanEmail, password }),
-      });
+      let res: Response;
+      try {
+        res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: cleanEmail, password }),
+        });
+      } catch {
+        throw new Error('Backend server is unreachable on port 4000. Please start the server using run_all.bat or start_server.bat.');
+      }
 
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
@@ -218,27 +223,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const signup = async (fullName: string, email: string, role: UserRole) => {
+  const signup = async (fullName: string, email: string, role: UserRole, password?: string) => {
     setIsLoading(true);
     try {
       const cleanEmail = email.toLowerCase().trim();
+      const pwd = password || 'password123';
 
-      if (role === 'student' && appMode === 'demo') {
-        await loginAsNewStudent(fullName, cleanEmail);
-        return;
+      let res: Response;
+      try {
+        res = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fullName, email: cleanEmail, password: pwd, role }),
+        });
+      } catch {
+        throw new Error('Backend server is unreachable on port 4000. Please start the server using run_all.bat or start_server.bat.');
       }
 
-      // Local fallback for demo accounts
-      const newProfile: UserProfile = {
-        id: `usr-${role}-${Date.now()}`,
-        email: cleanEmail,
-        fullName: fullName.trim(),
-        role,
-        companyName: role === 'recruiter' ? 'NexTech Innovations' : undefined,
-        institution: role === 'student' ? 'National Institute of Technology' : undefined,
-        createdAt: new Date().toISOString()
-      };
-      setUser(newProfile);
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || 'Failed to create account');
+      }
+
+      const data = await res.json();
+      const profile = mapBackendUserToProfile(data.user, data.organization);
+      setUser(profile);
+      setToken(data.token);
+      setActiveOrgId(data.organization?.id || null);
+
+      sessionStorage.setItem('sarathi_auth_token', data.token);
+      sessionStorage.setItem('sarathi_auth_user', JSON.stringify(profile));
+      sessionStorage.removeItem('sarathi_demo_college');
+
+      if (profile.role === 'recruiter') {
+        recruiterApi.setAuthToken(data.token, data.organization?.id);
+      } else if (profile.role === 'student') {
+        OpportunityService.setAuthToken(data.token);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -270,26 +291,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       throw new Error('Quick start is only permitted in demo mode.');
     }
     const cleanEmail = email || `student-${Date.now()}@sarathi.test`;
-    const res = await fetch('/api/auth/student-session', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        fullName: name,
-        email: cleanEmail,
-        institution: 'Demonstration University',
-        targetRole: 'Junior Developer'
-      })
-    });
-    if (res.ok) {
-      const data = await res.json();
-      const profile = mapBackendUserToProfile(data.user);
-      setUser(profile);
-      setToken(data.token);
-      sessionStorage.setItem('sarathi_auth_token', data.token);
-      sessionStorage.setItem('sarathi_auth_user', JSON.stringify(profile));
-      sessionStorage.removeItem('sarathi_demo_college');
-      OpportunityService.setAuthToken(data.token);
+    let res: Response;
+    try {
+      res = await fetch('/api/auth/student-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fullName: name,
+          email: cleanEmail,
+          institution: 'Demonstration University',
+          targetRole: 'Junior Developer'
+        })
+      });
+    } catch {
+      throw new Error('Backend server is unreachable on port 4000. Please start the server using run_all.bat or start_server.bat.');
     }
+
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson.error || 'Failed to initialize student demo session');
+    }
+
+    const data = await res.json();
+    const profile = mapBackendUserToProfile(data.user);
+    setUser(profile);
+    setToken(data.token);
+    sessionStorage.setItem('sarathi_auth_token', data.token);
+    sessionStorage.setItem('sarathi_auth_user', JSON.stringify(profile));
+    sessionStorage.removeItem('sarathi_demo_college');
+    OpportunityService.setAuthToken(data.token);
   };
 
   const loginWithGoogle = async (googleData: { email: string; fullName?: string; avatarUrl?: string; role?: UserRole }) => {
@@ -298,16 +328,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const cleanEmail = googleData.email.toLowerCase().trim();
       const targetRole = googleData.role || 'student';
 
-      const res = await fetch('/api/auth/google', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: cleanEmail,
-          fullName: googleData.fullName,
-          avatarUrl: googleData.avatarUrl,
-          role: targetRole,
-        }),
-      });
+      let res: Response;
+      try {
+        res = await fetch('/api/auth/google', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: cleanEmail,
+            fullName: googleData.fullName,
+            avatarUrl: googleData.avatarUrl,
+            role: targetRole,
+          }),
+        });
+      } catch {
+        throw new Error('Backend server is unreachable on port 4000. Please start the server using run_all.bat or start_server.bat.');
+      }
 
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));

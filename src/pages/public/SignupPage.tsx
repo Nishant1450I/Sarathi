@@ -34,7 +34,7 @@ export const SignupPage: React.FC = () => {
     }
 
     try {
-      await signup(fullName, email, role);
+      await signup(fullName, email, role, password);
       if (role === 'recruiter') navigate('/recruiter/dashboard');
       else if (role === 'college') navigate('/college/dashboard');
       else navigate('/student/dashboard');

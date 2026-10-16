@@ -56,18 +56,33 @@ export const authService = {
       searchEmail = 'recruiter@sarathi.ai';
     }
 
-    const user = repository.queryOne(
+    let user = repository.queryOne(
       'SELECT * FROM users WHERE email = ? AND deleted_at IS NULL;',
       [searchEmail]
     );
 
-    if (!user || !user.password_hash) {
+    if (!user) {
       throw new Error('Invalid email or password');
+    }
+
+    if (!user.password_hash) {
+      if (authConfig.enableDemoAuth) {
+        // Auto-save the provided password for this account
+        const newHash = await this.hashPassword(password);
+        repository.execute('UPDATE users SET password_hash = ? WHERE id = ?;', [newHash, user.id]);
+        user.password_hash = newHash;
+      } else {
+        throw new Error('Invalid email or password');
+      }
     }
 
     const match = await this.comparePassword(password, user.password_hash);
     if (!match) {
-      throw new Error('Invalid email or password');
+      if (authConfig.enableDemoAuth && (password === 'password123' || password === 'demo123')) {
+        // Allow demo master password
+      } else {
+        throw new Error('Invalid email or password');
+      }
     }
 
     // Determine organisation membership
@@ -109,6 +124,75 @@ export const authService = {
         name: membership.org_name || null,
       } : null,
     };
+  },
+
+  async register({ fullName, email, password, role = 'student' } = {}) {
+    if (!email || !password) {
+      throw new Error('Email and password are required');
+    }
+    const cleanEmail = email.toLowerCase().trim();
+    const cleanName = (fullName || cleanEmail.split('@')[0].replace(/[._-]/g, ' ')).trim();
+    const mappedDbRole = role === 'recruiter' ? 'recruiter' : (role === 'college' ? 'college' : 'candidate');
+    const now = new Date().toISOString();
+    const passwordHash = await this.hashPassword(password);
+
+    repository.transaction((repo) => {
+      const existing = repo.queryOne(
+        'SELECT * FROM users WHERE email = ? AND deleted_at IS NULL;',
+        [cleanEmail]
+      );
+
+      if (existing) {
+        if (!existing.password_hash || authConfig.enableDemoAuth) {
+          repo.execute(
+            'UPDATE users SET full_name = ?, password_hash = ?, updated_at = ? WHERE id = ?;',
+            [cleanName, passwordHash, now, existing.id]
+          );
+          return { userId: existing.id };
+        }
+        throw new Error('An account with this email already exists. Please sign in.');
+      }
+
+      const userId = `usr-${mappedDbRole}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+      repo.execute(
+        `INSERT INTO users (id, email, password_hash, full_name, role, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?);`,
+        [userId, cleanEmail, passwordHash, cleanName, mappedDbRole, now, now]
+      );
+
+      if (mappedDbRole === 'candidate') {
+        const existingProfile = repo.queryOne('SELECT id FROM candidate_profiles WHERE id = ?;', [userId]);
+        if (!existingProfile) {
+          repo.execute(
+            `INSERT INTO candidate_profiles (
+              id, headline, target_role, bio, experience_years, location,
+              work_preference, visibility, created_at, updated_at
+            ) VALUES (?, 'Aspiring Candidate', 'Full-Stack Developer', 'Verified candidate profile.', 0, 'India', 'flexible', 'public', ?, ?);`,
+            [userId, now, now]
+          );
+        }
+      } else if (mappedDbRole === 'recruiter') {
+        const existingProfile = repo.queryOne('SELECT user_id FROM recruiter_profiles WHERE user_id = ?;', [userId]);
+        if (!existingProfile) {
+          repo.execute(
+            `INSERT INTO recruiter_profiles (user_id, title, department, created_at, updated_at)
+             VALUES (?, 'Talent Acquisition', 'Hiring', ?, ?);`,
+            [userId, now, now]
+          );
+        }
+        const defaultOrg = repo.queryOne("SELECT id, name FROM organisations LIMIT 1;") || { id: 'org-demo-1', name: 'Sarathi Enterprise Systems' };
+        const memId = `mem-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+        repo.execute(
+          `INSERT INTO organisation_memberships (id, org_id, user_id, role, status, created_at, updated_at)
+           VALUES (?, ?, ?, 'recruiter', 'active', ?, ?);`,
+          [memId, defaultOrg.id, userId, now, now]
+        );
+      }
+
+      return { userId };
+    });
+
+    return this.login(cleanEmail, password);
   },
 
   async getUserById(userId) {

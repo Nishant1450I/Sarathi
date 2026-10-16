@@ -1,2 +1,2 @@
 SET VITE_COLORS=0
-npx vite build
+node ./node_modules/vite/bin/vite.js build

@@ -27,6 +27,19 @@ router.post('/login', async (req, res, next) => {
   }
 });
 
+router.post('/register', async (req, res, next) => {
+  try {
+    const { email, password, fullName, role } = req.body || {};
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+    const result = await authService.register({ email, password, fullName, role });
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.post('/google', async (req, res, next) => {
   try {
     const { email, fullName, avatarUrl, role } = req.body || {};
@@ -62,7 +75,7 @@ router.post('/student-session', async (req, res, next) => {
     const cleanEmail = email.toLowerCase().trim();
     const cleanId = id || `usr-student-${cleanEmail.replace(/[^a-z0-9]/g, '-')}`;
 
-    // Security check: Never issue a session for an existing non-demo account without credentials
+    // Security check: Never issue a demo session for an account with verified password credentials in production
     const DEMO_STUDENT_EMAIL = 'student@sarathi.ai';
     const DEMO_STUDENT_ID = 'usr-student-demo';
 
