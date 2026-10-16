@@ -14,6 +14,7 @@ import pipelineRoutes from './routes/pipelineRoutes.js';
 import interviewRoutes from './routes/interviewRoutes.js';
 import analyticsRoutes from './routes/analyticsRoutes.js';
 import organizationRoutes from './routes/organizationRoutes.js';
+import chatRoutes from './routes/chatRoutes.js';
 
 // Validate configuration on startup
 validateConfig();
@@ -66,6 +67,7 @@ app.use('/api/pipeline', pipelineRoutes);
 app.use('/api/interviews', interviewRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/organization', organizationRoutes);
+app.use('/api/chat', chatRoutes);
 
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';

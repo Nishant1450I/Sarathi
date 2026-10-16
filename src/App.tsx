@@ -5,6 +5,7 @@ import { PublicLayout } from './layouts/PublicLayout';
 import { StudentLayout } from './layouts/StudentLayout';
 import { RecruiterLayout } from './layouts/RecruiterLayout';
 import { CollegeLayout } from './layouts/CollegeLayout';
+import { FloatingChatbot } from './components/chat/FloatingChatbot';
 
 // Public pages
 import { LandingPage } from './pages/public/LandingPage';
@@ -99,6 +100,9 @@ export const App: React.FC = () => {
           {/* Catch-all 404 Route */}
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
+
+        {/* Global Floating AI Career Copilot */}
+        <FloatingChatbot />
       </BrowserRouter>
     </AuthProvider>
   );
