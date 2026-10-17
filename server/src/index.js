@@ -1,5 +1,6 @@
 import express from 'express';
-import { app as appConfig, corsOrigins, validateConfig } from './config/index.js';
+import helmet from 'helmet';
+import { app as appConfig, corsOrigins, validateConfig, assessmentV2 } from './config/index.js';
 import { runMigrations } from './data/migrate.mjs';
 import { authenticate } from './middleware/authMiddleware.js';
 import { errorHandler } from './middleware/errorHandler.js';
@@ -10,11 +11,18 @@ import jobRoutes from './routes/jobRoutes.js';
 import candidateRoutes from './routes/candidateRoutes.js';
 import verificationRoutes from './routes/verificationRoutes.js';
 import assessmentRoutes from './routes/assessmentRoutes.js';
+import assessmentV2Routes from './routes/assessmentV2Routes.js';
 import pipelineRoutes from './routes/pipelineRoutes.js';
 import interviewRoutes from './routes/interviewRoutes.js';
 import analyticsRoutes from './routes/analyticsRoutes.js';
 import organizationRoutes from './routes/organizationRoutes.js';
 import chatRoutes from './routes/chatRoutes.js';
+import roadmapRoutes from './routes/roadmapRoutes.js';
+import settingsRoutes from './routes/settingsRoutes.js';
+import resourceRoutes from './routes/resourceRoutes.js';
+import notificationRoutes from './routes/notificationRoutes.js';
+import feedbackRoutes from './routes/feedbackRoutes.js';
+import passportShareRoutes from './routes/passportShareRoutes.js';
 
 // Validate configuration on startup
 validateConfig();
@@ -27,6 +35,12 @@ try {
 }
 
 const app = express();
+
+// Security headers
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+  contentSecurityPolicy: false,
+}));
 
 // CORS middleware
 app.use((req, res, next) => {
@@ -63,11 +77,23 @@ app.use('/api/jobs', jobRoutes);
 app.use('/api/candidates', candidateRoutes);
 app.use('/api/verifications', verificationRoutes);
 app.use('/api/assessments', assessmentRoutes);
+app.use('/api/assessments/v2', (req, res, next) => {
+  if (!assessmentV2.enabled && process.env.ASSESSMENT_V2_ENABLED !== 'true') {
+    return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'V2 Assessment Engine is disabled' } });
+  }
+  return assessmentV2Routes(req, res, next);
+});
 app.use('/api/pipeline', pipelineRoutes);
 app.use('/api/interviews', interviewRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/organization', organizationRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/roadmap', roadmapRoutes);
+app.use('/api/settings', settingsRoutes);
+app.use('/api/resources', resourceRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/feedback', feedbackRoutes);
+app.use('/api/passport', passportShareRoutes);
 
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';

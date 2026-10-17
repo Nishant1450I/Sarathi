@@ -11,9 +11,16 @@ export interface UserProfile {
   institution?: string;
   companyName?: string;
   bio?: string;
+  headline?: string;
   degree?: string;
-  graduationYear?: string;
+  graduationYear?: string | number;
   location?: string;
+  githubUrl?: string;
+  linkedinUrl?: string;
+  portfolioUrl?: string;
+  resumeUrl?: string;
+  experienceYears?: number;
+  workPreference?: string;
   createdAt: string;
 }
 

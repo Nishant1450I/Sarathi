@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { assessmentService } from '../services/assessmentService.js';
 import { requireAuth, requireRole } from '../middleware/authMiddleware.js';
+import { assessmentV2 } from '../config/index.js';
 
 const router = Router();
 
@@ -65,6 +66,15 @@ router.post('/record-result', requireAuth, requireRole(['platform_admin', 'org_o
 // Student diagnostic assessment submission
 router.post('/student-submit', requireAuth, (req, res, next) => {
   try {
+    if (assessmentV2.enabled) {
+      return res.status(410).json({
+        error: {
+          code: 'GONE',
+          message: 'Client-computed assessment submission is deprecated and disabled under ASSESSMENT_V2_ENABLED. Please use /api/assessments/v2/sessions/:id/submit.'
+        }
+      });
+    }
+
     if (!req.user || !req.user.id) {
       return res.status(401).json({ error: 'Authentication required' });
     }

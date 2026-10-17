@@ -5,11 +5,29 @@ import { StudentHeader } from '../components/navigation/StudentHeader';
 import { StudentProvider } from '../context/StudentContext';
 import { useAuth } from '../context/AuthContext';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
+import { NotificationDrawer } from '../components/common/NotificationDrawer';
+import { FeedbackModal } from '../components/common/FeedbackModal';
+import { apiClient } from '../services/apiClient';
 
 export const StudentLayout: React.FC = () => {
   const { user, isLoading } = useAuth();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [notificationDrawerOpen, setNotificationDrawerOpen] = useState(false);
+  const [feedbackModalOpen, setFeedbackModalOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const location = useLocation();
+
+  React.useEffect(() => {
+    if (!user) return;
+    apiClient
+      .get<{ success: boolean; unreadCount: number }>('/api/notifications')
+      .then((res) => {
+        if (res && typeof res.unreadCount === 'number') {
+          setUnreadCount(res.unreadCount);
+        }
+      })
+      .catch(() => {});
+  }, [user?.id]);
 
   if (isLoading) {
     return <LoadingSpinner fullScreen variant="blue" message="Loading student portal..." />;
@@ -40,6 +58,9 @@ export const StudentLayout: React.FC = () => {
     if (path.startsWith('/student/settings')) {
       return { section: 'Account', title: 'Account Settings' };
     }
+    if (path.startsWith('/student/resources')) {
+      return { section: 'Learning & Growth', title: 'Curated Learning Library' };
+    }
     return { section: 'Student Portal', title: 'Student Portal' };
   };
 
@@ -57,12 +78,26 @@ export const StudentLayout: React.FC = () => {
             onMobileMenuToggle={() => setMobileSidebarOpen(true)}
             pageTitle={pageMeta.title}
             sectionTitle={pageMeta.section}
+            unreadCount={unreadCount}
+            onOpenNotifications={() => setNotificationDrawerOpen(true)}
+            onOpenFeedback={() => setFeedbackModalOpen(true)}
           />
           <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
             <Outlet />
           </main>
         </div>
       </div>
+
+      <NotificationDrawer
+        isOpen={notificationDrawerOpen}
+        onClose={() => setNotificationDrawerOpen(false)}
+        onUnreadCountChange={setUnreadCount}
+      />
+
+      <FeedbackModal
+        isOpen={feedbackModalOpen}
+        onClose={() => setFeedbackModalOpen(false)}
+      />
     </StudentProvider>
   );
 };

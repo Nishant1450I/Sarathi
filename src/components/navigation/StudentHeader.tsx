@@ -1,34 +1,34 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Menu, Bell, LogOut, ChevronDown, User, Settings } from 'lucide-react';
+import { Menu, Bell, LogOut, ChevronDown, User, Settings, MessageSquarePlus } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-
 
 interface StudentHeaderProps {
   onMobileMenuToggle: () => void;
   pageTitle: string;
   sectionTitle?: string;
+  unreadCount?: number;
+  onOpenNotifications?: () => void;
+  onOpenFeedback?: () => void;
 }
 
 export const StudentHeader: React.FC<StudentHeaderProps> = ({
   onMobileMenuToggle,
   pageTitle,
-  sectionTitle
+  sectionTitle,
+  unreadCount = 0,
+  onOpenNotifications,
+  onOpenFeedback,
 }) => {
   const { user, switchDemoRole, logout } = useAuth();
   const navigate = useNavigate();
-  const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement>(null);
-  const notifMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (profileMenuRef.current && !profileMenuRef.current.contains(e.target as Node)) {
         setShowProfileMenu(false);
-      }
-      if (notifMenuRef.current && !notifMenuRef.current.contains(e.target as Node)) {
-        setShowNotifications(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -49,7 +49,7 @@ export const StudentHeader: React.FC<StudentHeaderProps> = ({
           </button>
           <div>
             {sectionTitle && (
-              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[#8FA1C0] leading-none mb-1">
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[#405B8B] leading-none mb-1">
                 <span>Student</span>
                 <span>/</span>
                 <span className="text-[#405B8B] font-medium">{sectionTitle}</span>
@@ -63,47 +63,38 @@ export const StudentHeader: React.FC<StudentHeaderProps> = ({
         <div className="flex items-center gap-3">
 
 
-          {/* Notifications Dropdown Toggle */}
-          <div className="relative" ref={notifMenuRef}>
+          {/* Feedback Button */}
+          {onOpenFeedback && (
             <button
-              onClick={() => {
-                setShowNotifications(!showNotifications);
-                setShowProfileMenu(false);
-              }}
-              className="p-2 text-[#405B8B] hover:text-[#0B1B43] hover:bg-slate-100 rounded-xl relative transition-colors focus-visible:ring-2 focus-visible:ring-[#087BFA]"
-              title="Notifications"
-              aria-label="Notifications"
+              onClick={onOpenFeedback}
+              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[#E0E7F2] text-xs font-bold text-[#405B8B] hover:text-[#0B1B43] hover:bg-slate-50 transition-colors cursor-pointer"
+              title="Share platform feedback"
             >
-              <Bell className="w-5 h-5" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#087BFA] rounded-full ring-2 ring-white animate-pulse" />
+              <MessageSquarePlus className="w-3.5 h-3.5 text-[#603DF5]" />
+              <span>Feedback</span>
             </button>
+          )}
 
-            {showNotifications && (
-              <div className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-xl border border-[#E0E7F2] p-4 z-50">
-                <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                  <span className="font-bold text-sm text-[#0B1B43]">Notifications</span>
-                  <span className="text-xs text-[#087BFA] cursor-pointer hover:underline">Mark all read</span>
-                </div>
-                <div className="py-2 space-y-3">
-                  <div className="p-2.5 rounded-xl bg-blue-50/60 text-xs">
-                    <p className="font-semibold text-[#0B1B43]">Roadmap Task Ready!</p>
-                    <p className="text-[#405B8B] mt-0.5">JWT Authentication & Security task recommended for today.</p>
-                  </div>
-                  <div className="p-2.5 rounded-xl bg-emerald-50/60 text-xs">
-                    <p className="font-semibold text-[#0B1B43]">New Job Match (84%)</p>
-                    <p className="text-[#405B8B] mt-0.5">Junior Full-Stack Web Developer at NexTech Innovations.</p>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+          {/* Notifications Drawer Toggle */}
+          <button
+            onClick={onOpenNotifications}
+            className="p-2 text-[#405B8B] hover:text-[#0B1B43] hover:bg-slate-100 rounded-xl relative transition-colors focus-visible:ring-2 focus-visible:ring-[#087BFA] cursor-pointer"
+            title="Notifications"
+            aria-label="Notifications"
+          >
+            <Bell className="w-5 h-5" />
+            {unreadCount > 0 ? (
+              <span className="absolute top-1 right-1 min-w-[18px] h-[18px] px-1 bg-[#087BFA] text-white text-[10px] font-extrabold rounded-full flex items-center justify-center ring-2 ring-white">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            ) : null}
+          </button>
 
           {/* Profile Menu Dropdown */}
           <div className="relative" ref={profileMenuRef}>
             <button
               onClick={() => {
                 setShowProfileMenu(!showProfileMenu);
-                setShowNotifications(false);
               }}
               className="flex items-center gap-2 p-1.5 rounded-xl hover:bg-slate-100 transition-colors focus-visible:ring-2 focus-visible:ring-[#087BFA]"
               aria-label="User profile menu"

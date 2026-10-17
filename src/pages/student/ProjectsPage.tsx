@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   FolderGit2,
   Plus,
   GitBranch,
   Globe,
   Trash2,
-  Edit
+  Edit,
+  ExternalLink,
+  Image as ImageIcon
 } from 'lucide-react';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
@@ -13,10 +15,13 @@ import { Badge } from '../../components/common/Badge';
 import { Modal } from '../../components/common/Modal';
 import { PageHeader } from '../../components/common/PageHeader';
 import { EmptyState } from '../../components/common/EmptyState';
+import { useAuth } from '../../context/AuthContext';
 import { useStudent } from '../../context/StudentContext';
+import { apiClient } from '../../services/apiClient';
 import type { ProjectItem } from '../../types/project';
 
 export const ProjectsPage: React.FC = () => {
+  const { user } = useAuth();
   const { projects, addProject, updateProject, deleteProject } = useStudent();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<ProjectItem | null>(null);
@@ -27,8 +32,75 @@ export const ProjectsPage: React.FC = () => {
   const [technologies, setTechnologies] = useState('');
   const [repositoryUrl, setRepositoryUrl] = useState('');
   const [liveDemoUrl, setLiveDemoUrl] = useState('');
+  const [screenshotUrl, setScreenshotUrl] = useState('');
   const [skillsDemonstrated, setSkillsDemonstrated] = useState('');
   const [error, setError] = useState('');
+  const [isImporting, setIsImporting] = useState(false);
+  const [importSuccess, setImportSuccess] = useState(false);
+
+  // Calculate language distribution for GitHub card
+  const languageDistribution = useMemo(() => {
+    const counts: Record<string, number> = {};
+    projects.forEach((p) => {
+      p.technologies.forEach((t) => {
+        counts[t] = (counts[t] || 0) + 1;
+      });
+    });
+    const total = Object.values(counts).reduce((a, b) => a + b, 0);
+    if (total === 0) return [];
+    const colors = ['#087BFA', '#603DF5', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'];
+    return Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([lang, count], i) => ({
+        name: lang,
+        count,
+        pct: Math.round((count / total) * 100),
+        color: colors[i % colors.length],
+      }));
+  }, [projects]);
+
+  const handleGithubImport = async () => {
+    if (!repositoryUrl || !repositoryUrl.includes('github.com')) {
+      setError('Please enter a valid GitHub repository URL first (e.g. https://github.com/owner/repo)');
+      return;
+    }
+
+    setIsImporting(true);
+    setError('');
+    try {
+      const res = await apiClient.post<{
+        success: boolean;
+        data: {
+          title: string;
+          description: string;
+          repositoryUrl: string;
+          homepage: string;
+          languages: string[];
+          topics: string[];
+        };
+      }>('/api/candidates/github/import', { repoUrl: repositoryUrl });
+
+      if (res?.success && res.data) {
+        if (!title || title.trim() === '') setTitle(res.data.title);
+        if (!description || description.trim() === '') setDescription(res.data.description);
+        if (res.data.languages && res.data.languages.length > 0) {
+          const combined = Array.from(new Set([...res.data.languages, ...(res.data.topics || [])])).join(', ');
+          setTechnologies(combined);
+          setSkillsDemonstrated(res.data.languages.slice(0, 3).join(', '));
+        }
+        if (res.data.homepage && !liveDemoUrl) {
+          setLiveDemoUrl(res.data.homepage);
+        }
+        setImportSuccess(true);
+        setTimeout(() => setImportSuccess(false), 3000);
+      }
+    } catch (err: any) {
+      setError(err.message || 'Could not auto-fill from GitHub');
+    } finally {
+      setIsImporting(false);
+    }
+  };
 
   const openAddModal = () => {
     setEditingProject(null);
@@ -37,6 +109,7 @@ export const ProjectsPage: React.FC = () => {
     setTechnologies('');
     setRepositoryUrl('');
     setLiveDemoUrl('');
+    setScreenshotUrl('');
     setSkillsDemonstrated('');
     setError('');
     setIsModalOpen(true);
@@ -49,6 +122,7 @@ export const ProjectsPage: React.FC = () => {
     setTechnologies(proj.technologies.join(', '));
     setRepositoryUrl(proj.repositoryUrl);
     setLiveDemoUrl(proj.liveDemoUrl || '');
+    setScreenshotUrl(proj.screenshotUrl || '');
     setSkillsDemonstrated(proj.skillsDemonstrated.join(', '));
     setError('');
     setIsModalOpen(true);
@@ -58,13 +132,14 @@ export const ProjectsPage: React.FC = () => {
     e.preventDefault();
     setError('');
 
-    if (!title || !description || !repositoryUrl) {
+    if (!title.trim() || !description.trim() || !repositoryUrl.trim()) {
       setError('Title, description, and repository URL are required.');
       return;
     }
 
-    if (!repositoryUrl.startsWith('http://') && !repositoryUrl.startsWith('https://')) {
-      setError('Repository URL must start with http:// or https://');
+    const GITHUB_REPO_REGEX = /^https?:\/\/(www\.)?github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+/i;
+    if (!GITHUB_REPO_REGEX.test(repositoryUrl.trim())) {
+      setError('Repository URL is required and must match github.com/{owner}/{repo} (e.g. https://github.com/facebook/react)');
       return;
     }
 
@@ -74,20 +149,22 @@ export const ProjectsPage: React.FC = () => {
     if (editingProject) {
       updateProject({
         ...editingProject,
-        title,
-        description,
+        title: title.trim(),
+        description: description.trim(),
         technologies: techArray,
-        repositoryUrl,
-        liveDemoUrl: liveDemoUrl || undefined,
+        repositoryUrl: repositoryUrl.trim(),
+        liveDemoUrl: liveDemoUrl.trim() || undefined,
+        screenshotUrl: screenshotUrl.trim() || undefined,
         skillsDemonstrated: skillsArray
       });
     } else {
       addProject({
-        title,
-        description,
+        title: title.trim(),
+        description: description.trim(),
         technologies: techArray,
-        repositoryUrl,
-        liveDemoUrl: liveDemoUrl || undefined,
+        repositoryUrl: repositoryUrl.trim(),
+        liveDemoUrl: liveDemoUrl.trim() || undefined,
+        screenshotUrl: screenshotUrl.trim() || undefined,
         skillsDemonstrated: skillsArray
       });
     }
@@ -116,6 +193,75 @@ export const ProjectsPage: React.FC = () => {
           </Button>
         }
       />
+
+      {/* GITHUB DEVELOPER PROFILE CARD */}
+      <Card className="p-6 border-[#E0E7F2] bg-gradient-to-r from-slate-900 via-[#0B1B43] to-[#081B3B] text-white shadow-md">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center text-white shrink-0">
+              <GitBranch className="w-6 h-6 text-[#087BFA]" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-extrabold text-white">GitHub Developer Profile</h2>
+                <Badge variant="purple">Evidence Hub</Badge>
+              </div>
+              <p className="text-xs text-slate-300 mt-0.5">
+                {user?.githubUrl ? (
+                  <a
+                    href={user.githubUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:underline text-[#087BFA] font-bold inline-flex items-center gap-1"
+                  >
+                    <span>{user.githubUrl.replace(/^https?:\/\/(www\.)?github\.com\//, '@')}</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                ) : (
+                  <span>Connect your GitHub repository URLs below to build verifiable evidence.</span>
+                )}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-6 self-start md:self-auto">
+            <div className="text-left md:text-right">
+              <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
+                Public Repositories
+              </span>
+              <span className="text-2xl font-black text-white">{projects.length}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Top Languages Breakdown Bar */}
+        {languageDistribution.length > 0 && (
+          <div className="mt-5 pt-4 border-t border-white/10 space-y-2.5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+              <span className="font-bold text-slate-300">Top Languages Across Repositories</span>
+              <div className="flex flex-wrap items-center gap-3">
+                {languageDistribution.map((l) => (
+                  <div key={l.name} className="flex items-center gap-1.5 text-[11px] text-slate-300">
+                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: l.color }} />
+                    <span className="font-semibold">{l.name}</span>
+                    <span className="text-slate-400">({l.pct}%)</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="h-2.5 rounded-full overflow-hidden flex bg-white/10 p-0.5">
+              {languageDistribution.map((l) => (
+                <div
+                  key={l.name}
+                  style={{ width: `${l.pct}%`, backgroundColor: l.color }}
+                  title={`${l.name}: ${l.pct}%`}
+                  className="h-full rounded-xs transition-all"
+                />
+              ))}
+            </div>
+          </div>
+        )}
+      </Card>
 
       {/* PROJECTS LIST GRID */}
       {projects.length === 0 ? (
@@ -149,6 +295,8 @@ export const ProjectsPage: React.FC = () => {
                         ? 'success'
                         : proj.verificationStatus === 'evidence-submitted'
                         ? 'purple'
+                        : proj.verificationStatus === 'rejected'
+                        ? 'danger'
                         : 'blue'
                     }
                   >
@@ -156,11 +304,36 @@ export const ProjectsPage: React.FC = () => {
                       ? 'Verified Credential'
                       : proj.verificationStatus === 'evidence-submitted'
                       ? 'Pending Review'
+                      : proj.verificationStatus === 'rejected'
+                      ? 'Needs Revision'
                       : 'Draft Evidence'}
                   </Badge>
                 </div>
 
                 <p className="text-xs text-[#405B8B] leading-relaxed">{proj.description}</p>
+
+                {/* Reviewer Note if present */}
+                {proj.reviewerNote && (
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-0.5">
+                    <span className="font-bold text-[#0B1B43] block">Reviewer Feedback:</span>
+                    <span className="text-[#405B8B] leading-relaxed">{proj.reviewerNote}</span>
+                  </div>
+                )}
+
+                {/* Screenshot preview if present */}
+                {proj.screenshotUrl && (
+                  <div className="pt-1">
+                    <a
+                      href={proj.screenshotUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 text-xs text-[#087BFA] hover:underline font-semibold"
+                    >
+                      <ImageIcon className="w-3.5 h-3.5" />
+                      <span>View Screenshot Preview</span>
+                    </a>
+                  </div>
+                )}
 
                 {/* Tech stack tags */}
                 <div className="space-y-1">
@@ -193,19 +366,19 @@ export const ProjectsPage: React.FC = () => {
                   <a
                     href={proj.repositoryUrl}
                     target="_blank"
-                    rel="noreferrer"
-                    className="font-bold text-[#087BFA] hover:underline flex items-center gap-1"
+                    rel="noopener noreferrer"
+                    className="font-bold text-[#087BFA] hover:underline flex items-center gap-1.5"
                   >
                     <GitBranch className="w-4 h-4" />
-                    <span>Repository</span>
+                    <span>Open Repo</span>
                   </a>
 
                   {proj.liveDemoUrl && (
                     <a
                       href={proj.liveDemoUrl}
                       target="_blank"
-                      rel="noreferrer"
-                      className="font-bold text-[#16A34A] hover:underline flex items-center gap-1"
+                      rel="noopener noreferrer"
+                      className="font-bold text-[#16A34A] hover:underline flex items-center gap-1.5"
                     >
                       <Globe className="w-4 h-4" />
                       <span>Live Demo</span>
@@ -284,7 +457,18 @@ export const ProjectsPage: React.FC = () => {
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-[#0B1B43] mb-1">Repository URL (GitHub / GitLab)</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-bold text-[#0B1B43]">Repository URL (GitHub / GitLab)</label>
+              <button
+                type="button"
+                onClick={handleGithubImport}
+                disabled={isImporting}
+                className="text-[11px] font-bold text-[#087BFA] hover:text-[#065ec0] flex items-center gap-1 cursor-pointer disabled:opacity-50"
+              >
+                <GitBranch className="w-3 h-3" />
+                {isImporting ? 'Importing...' : 'Auto-fill from GitHub'}
+              </button>
+            </div>
             <input
               type="url"
               value={repositoryUrl}
@@ -293,6 +477,9 @@ export const ProjectsPage: React.FC = () => {
               className="w-full p-2.5 rounded-xl border border-[#E0E7F2] text-sm text-[#0B1B43]"
               required
             />
+            {importSuccess && (
+              <p className="text-[11px] text-emerald-600 font-bold mt-1">Repository metadata imported successfully!</p>
+            )}
           </div>
 
           <div>
@@ -302,6 +489,17 @@ export const ProjectsPage: React.FC = () => {
               value={liveDemoUrl}
               onChange={(e) => setLiveDemoUrl(e.target.value)}
               placeholder="https://my-app.vercel.app"
+              className="w-full p-2.5 rounded-xl border border-[#E0E7F2] text-sm text-[#0B1B43]"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-[#0B1B43] mb-1">Project Screenshot / Preview URL (Optional)</label>
+            <input
+              type="url"
+              value={screenshotUrl}
+              onChange={(e) => setScreenshotUrl(e.target.value)}
+              placeholder="https://images.unsplash.com/... or cloud image URL"
               className="w-full p-2.5 rounded-xl border border-[#E0E7F2] text-sm text-[#0B1B43]"
             />
           </div>

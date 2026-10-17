@@ -21,6 +21,47 @@ export function runMigrations(dbFile) {
     return { applied: false, version: currentVersion };
   }
 
+  // Idempotently add any new columns to candidate_profiles if table exists
+  try {
+    const tableCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='candidate_profiles';").get();
+    if (tableCheck) {
+      const cols = db.prepare("PRAGMA table_info(candidate_profiles);").all();
+      const colNames = new Set(cols.map(c => c.name));
+      if (!colNames.has('linkedin_url')) {
+        db.exec('ALTER TABLE candidate_profiles ADD COLUMN linkedin_url TEXT;');
+      }
+      if (!colNames.has('degree')) {
+        db.exec('ALTER TABLE candidate_profiles ADD COLUMN degree TEXT;');
+      }
+      if (!colNames.has('graduation_year')) {
+        db.exec('ALTER TABLE candidate_profiles ADD COLUMN graduation_year INTEGER;');
+      }
+    }
+
+    const attemptsCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='assessment_attempts';").get();
+    if (attemptsCheck) {
+      const cols = db.prepare("PRAGMA table_info(assessment_attempts);").all();
+      const colNames = new Set(cols.map(c => c.name));
+      if (!colNames.has('engine_version')) {
+        db.exec("ALTER TABLE assessment_attempts ADD COLUMN engine_version TEXT DEFAULT 'v1';");
+      }
+    }
+
+    const sessionsCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='assessment_sessions';").get();
+    if (sessionsCheck) {
+      const cols = db.prepare("PRAGMA table_info(assessment_sessions);").all();
+      const colNames = new Set(cols.map(c => c.name));
+      if (!colNames.has('deadline_at')) {
+        db.exec("ALTER TABLE assessment_sessions ADD COLUMN deadline_at TEXT;");
+      }
+      if (!colNames.has('save_version')) {
+        db.exec("ALTER TABLE assessment_sessions ADD COLUMN save_version INTEGER DEFAULT 1;");
+      }
+    }
+  } catch (err) {
+    console.warn('Column migration note:', err.message);
+  }
+
   // Execute canonical DDL
   db.exec(ddl);
 

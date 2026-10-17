@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Award,
   Printer,
@@ -6,13 +6,19 @@ import {
   FolderGit2,
   GraduationCap,
   Share2,
-  Clock
+  Clock,
+  ExternalLink,
+  Copy,
+  Check,
+  X,
+  Globe
 } from 'lucide-react';
 import { Button } from '../../components/common/Button';
 import { Badge } from '../../components/common/Badge';
 import { Logo } from '../../components/common/Logo';
 import { useStudent } from '../../context/StudentContext';
 import { useAuth } from '../../context/AuthContext';
+import { apiClient } from '../../services/apiClient';
 
 export const SkillPassportPage: React.FC = () => {
   const { user } = useAuth();
@@ -25,13 +31,50 @@ export const SkillPassportPage: React.FC = () => {
     assessedSkillsCount
   } = useStudent();
 
+  const [shareData, setShareData] = useState<{ publicId: string; isEnabled: boolean } | null>(null);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [isToggling, setIsToggling] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    const fetchShare = async () => {
+      try {
+        const res = await apiClient.get<{ success: boolean; data: { publicId: string; isEnabled: boolean } }>('/api/passport/share');
+        if (res?.success) {
+          setShareData(res.data);
+        }
+      } catch (err) {
+        console.warn('Failed to fetch passport share info', err);
+      }
+    };
+    fetchShare();
+  }, []);
+
   const handlePrint = () => {
     window.print();
   };
 
-  const handleShare = () => {
-    navigator.clipboard.writeText(window.location.href);
-    alert('Skill Passport link copied to clipboard!');
+  const handleToggleShare = async () => {
+    setIsToggling(true);
+    try {
+      const res = await apiClient.post<{ success: boolean; data: { publicId: string; isEnabled: boolean } }>('/api/passport/share/toggle', {});
+      if (res?.success) {
+        setShareData(res.data);
+      }
+    } catch (err) {
+      console.error('Failed to toggle share state', err);
+    } finally {
+      setIsToggling(false);
+    }
+  };
+
+  const publicUrl = shareData ? `${window.location.origin}/passport/${shareData.publicId}` : '';
+
+  const handleCopyLink = () => {
+    if (!publicUrl) return;
+    navigator.clipboard.writeText(publicUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
   };
 
   const isVerified = skills.some(s => s.status === 'verified') || projects.some(p => p.verificationStatus === 'verified');
@@ -62,7 +105,7 @@ export const SkillPassportPage: React.FC = () => {
         <div className="flex items-center gap-3 w-full sm:w-auto">
           <Button
             variant="outline"
-            onClick={handleShare}
+            onClick={() => setShowShareModal(true)}
             leftIcon={<Share2 className="w-4 h-4" />}
           >
             Share Link
@@ -226,6 +269,100 @@ export const SkillPassportPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* SHARE MODAL */}
+      {showShareModal && (
+        <div className="fixed inset-0 z-50 bg-[#0B1B43]/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-[#E0E7F2] space-y-5 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-purple-50 text-[#603DF5] rounded-xl">
+                  <Globe className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg text-[#0B1B43]">Share Skill Passport</h3>
+                  <p className="text-xs text-[#405B8B]">Create a public, tamper-verifiable credential link</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowShareModal(false)}
+                className="p-1 text-[#405B8B] hover:text-[#0B1B43] rounded-lg hover:bg-[#F4F7FC]"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="bg-[#F8FAFC] border border-[#E0E7F2] rounded-xl p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-bold text-[#0B1B43]">Public Link Access</p>
+                  <p className="text-xs text-[#405B8B]">
+                    {shareData?.isEnabled
+                      ? 'Anyone with this link can view your verified credential profile.'
+                      : 'Public access is disabled. The link will show an unavailable notice.'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleToggleShare}
+                  disabled={isToggling}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    shareData?.isEnabled ? 'bg-[#087BFA]' : 'bg-gray-300'
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                      shareData?.isEnabled ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {shareData?.isEnabled && (
+                <div className="pt-2">
+                  <label className="text-xs font-semibold text-[#405B8B] block mb-1">Public Passport URL</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={publicUrl}
+                      className="flex-1 bg-white border border-[#CBD5E1] rounded-lg px-3 py-2 text-xs font-mono text-[#0B1B43] focus:outline-none select-all"
+                    />
+                    <Button
+                      variant={copied ? 'success' : 'outline'}
+                      size="sm"
+                      onClick={handleCopyLink}
+                      leftIcon={copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    >
+                      {copied ? 'Copied!' : 'Copy'}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between pt-2">
+              {shareData?.isEnabled ? (
+                <a
+                  href={`/passport/${shareData.publicId}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs font-bold text-[#087BFA] hover:underline flex items-center gap-1"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  Preview Public View
+                </a>
+              ) : (
+                <span className="text-xs text-amber-600 font-medium">Enable public access to share</span>
+              )}
+
+              <Button variant="primary" onClick={() => setShowShareModal(false)}>
+                Done
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

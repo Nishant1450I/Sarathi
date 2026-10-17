@@ -7,19 +7,16 @@ const root = resolve(dirname(__filename), '..', '..');
 
 try {
   process.loadEnvFile?.(resolve(root, '.env'));
-} catch {
-  try {
-    process.loadEnvFile?.();
-  } catch {
-    // .env file is optional
-  }
-}
+} catch {}
+try {
+  process.loadEnvFile?.(resolve(root, 'server', '.env'));
+} catch {}
 
 export const app = {
   port: Number(process.env.PORT || 4000),
   host: process.env.HOST || '0.0.0.0',
   env: process.env.NODE_ENV || 'development',
-  mode: process.env.APP_MODE || (process.env.NODE_ENV === 'production' ? 'production' : (process.env.ENABLE_DEMO_AUTH === 'true' ? 'demo' : 'development')),
+  mode: process.env.APP_MODE || (process.env.NODE_ENV === 'production' ? 'production' : 'demo'),
   origin: process.env.APP_ORIGIN || 'http://localhost:5173',
 };
 
@@ -77,3 +74,17 @@ export const audit = {
   enabled: process.env.AUDIT_LOGGING !== 'false',
   filePath: resolve(root, 'data', 'audit.jsonl'),
 };
+
+export const assessmentV2 = {
+  enabled: process.env.ASSESSMENT_V2_ENABLED === 'true',
+  v2_1Enabled: process.env.ASSESSMENT_V2_1_ENABLED === 'true',
+  cameraEnabled: process.env.ASSESSMENT_CAMERA_ENABLED === 'true',
+  runnerDriver: process.env.RUNNER_DRIVER || 'local-dev',
+  judge0Url: process.env.JUDGE0_URL || 'http://localhost:2358',
+  judge0ApiKey: process.env.JUDGE0_API_KEY || '',
+  integrityRetentionDays: Number(process.env.INTEGRITY_RETENTION_DAYS || 90),
+  codeMaxBytes: Number(process.env.ASSESSMENT_CODE_MAX_BYTES || 20480),
+  executionTimeoutMs: Number(process.env.ASSESSMENT_RUNNER_TIMEOUT_MS || 5000),
+  passThreshold: Number(process.env.ASSESSMENT_PASS_THRESHOLD || 60),
+};
+
