@@ -7,6 +7,8 @@ export interface ProjectItem {
   technologies: string[];
   repositoryUrl: string;
   liveDemoUrl?: string;
+  screenshotUrl?: string;
+  reviewerNote?: string;
   skillsDemonstrated: string[];
   verificationStatus: VerificationStatus;
   createdAt: string;

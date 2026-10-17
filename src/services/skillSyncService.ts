@@ -46,6 +46,15 @@ export class SkillSyncService {
         })
       });
 
+      if (response.status === 410) {
+        // V2 server-side grading is active and has already persisted the attempt
+        return {
+          success: true,
+          resultId: result.id,
+          message: 'Server-side V2 grading verified and synchronized.'
+        };
+      }
+
       if (!response.ok) {
         const errorJson = await response.json().catch(() => ({}));
         throw new Error(errorJson.error || `Server responded with HTTP ${response.status}`);

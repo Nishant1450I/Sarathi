@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import { randomUUID as uuidv4 } from 'node:crypto';
 import { initDb, closeDb } from '../config/db.js';
 import { runMigrations } from '../data/migrate.mjs';
+import { seedAssessmentBank } from '../data/seeds/assessmentSeeder.js';
 
 export async function runSeeder(dbFile) {
   runMigrations(dbFile);
@@ -835,6 +836,9 @@ export async function runSeeder(dbFile) {
       VALUES (?, 'org-demo-1', 'usr-recruiter-1', ?, ?, ?, ?, ?);
     `).run(`ae-${uuidv4().slice(0, 8)}`, a.action, a.type, a.id, a.payload, now);
   }
+
+  // 13. V2 ASSESSMENT QUESTION BANK
+  seedAssessmentBank(db);
 
   console.log('Seeding completed successfully! 20 domains, realistic candidates, jobs, evidence, and audit logs are live.');
 }

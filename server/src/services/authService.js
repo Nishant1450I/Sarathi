@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { randomUUID as uuidv4 } from 'node:crypto';
+import { randomUUID as uuidv4, randomBytes } from 'node:crypto';
 import { repository } from '../data/repository.js';
 import { auth as authConfig } from '../config/index.js';
 
@@ -438,6 +438,93 @@ export const authService = {
         role: result.org.role,
         name: result.org.org_name || 'Sarathi Enterprise Systems',
       } : null,
+    };
+  },
+
+  async changePassword(userId, currentPassword, newPassword) {
+    if (!newPassword || newPassword.length < 8) {
+      throw new Error('New password must be at least 8 characters long');
+    }
+    const user = repository.queryOne('SELECT * FROM users WHERE id = ? AND deleted_at IS NULL;', [userId]);
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    if (user.password_hash) {
+      const match = await this.comparePassword(currentPassword, user.password_hash);
+      if (!match) {
+        if (!authConfig.enableDemoAuth || (currentPassword !== 'password123' && currentPassword !== 'demo123')) {
+          throw new Error('Current password is incorrect');
+        }
+      }
+    }
+
+    const newHash = await this.hashPassword(newPassword);
+    const now = new Date().toISOString();
+    repository.execute('UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?;', [newHash, now, userId]);
+
+    return { success: true, message: 'Password updated successfully' };
+  },
+
+  async createPasswordResetToken(email) {
+    if (!email) {
+      throw new Error('Email is required');
+    }
+    const cleanEmail = email.toLowerCase().trim();
+    const user = repository.queryOne('SELECT * FROM users WHERE email = ? AND deleted_at IS NULL;', [cleanEmail]);
+
+    if (!user) {
+      return {
+        success: true,
+        message: 'If an account exists with this email, password reset instructions have been sent.',
+      };
+    }
+
+    const resetToken = randomBytes(24).toString('hex');
+    const resetId = `pwr-${uuidv4().slice(0, 8)}`;
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour
+
+    repository.execute(
+      `INSERT INTO password_resets (id, user_id, token_hash, expires_at, used_at)
+       VALUES (?, ?, ?, ?, NULL);`,
+      [resetId, user.id, resetToken, expiresAt]
+    );
+
+    return {
+      success: true,
+      message: 'Password reset instructions have been sent.',
+      resetToken: (authConfig.enableDemoAuth || process.env.NODE_ENV !== 'production') ? resetToken : undefined,
+    };
+  },
+
+  async resetPasswordWithToken(token, newPassword) {
+    if (!token) {
+      throw new Error('Reset token is required');
+    }
+    if (!newPassword || newPassword.length < 8) {
+      throw new Error('New password must be at least 8 characters long');
+    }
+
+    const now = new Date().toISOString();
+    const resetRecord = repository.queryOne(
+      'SELECT * FROM password_resets WHERE token_hash = ? AND used_at IS NULL AND expires_at > ?;',
+      [token.trim(), now]
+    );
+
+    if (!resetRecord) {
+      throw new Error('Invalid or expired password reset token');
+    }
+
+    const newHash = await this.hashPassword(newPassword);
+
+    repository.transaction(repo => {
+      repo.execute('UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?;', [newHash, now, resetRecord.user_id]);
+      repo.execute('UPDATE password_resets SET used_at = ? WHERE id = ?;', [now, resetRecord.id]);
+    });
+
+    return {
+      success: true,
+      message: 'Password has been reset successfully. You can now log in.',
     };
   }
 };

@@ -18,4 +18,20 @@ router.get('/dashboard', requireAuth, requireRole(ANALYTICS_VIEW_ROLES), (req, r
   }
 });
 
+router.get('/student', requireAuth, async (req, res, next) => {
+  try {
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    const { StudentAnalyticsService } = await import('../services/studentAnalyticsService.js');
+    const data = await StudentAnalyticsService.getStudentAnalytics(req.user.id);
+    res.json({
+      success: true,
+      data
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;

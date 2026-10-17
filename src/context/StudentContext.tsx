@@ -9,6 +9,7 @@ import { initialStudentRoadmap } from '../data/mockRoadmaps';
 import { getDomainRoadmap, resolveDomainTrack, prioritizeRoadmapTasksWithGaps } from '../data/domainRoadmaps';
 import { StorageService, DEMO_STUDENT_ID } from '../services/storageService';
 import { SkillSyncService } from '../services/skillSyncService';
+import { apiClient } from '../services/apiClient';
 import { useAuth } from './AuthContext';
 
 interface StudentContextType {
@@ -227,6 +228,55 @@ export const StudentProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
   }, [user?.id]);
 
+  // Hydrate roadmap progress from SQLite backend
+  useEffect(() => {
+    if (!user || user.role !== 'student') return;
+
+    let isMounted = true;
+    const resolved = resolveDomainTrack(targetRole || targetDomain);
+    const trackKey = resolved.trackKey;
+
+    apiClient
+      .get<{ success: boolean; data: { trackKey: string; completedTaskIds: string[] } }>(
+        `/api/roadmap?trackKey=${encodeURIComponent(trackKey)}`
+      )
+      .then((res) => {
+        if (!isMounted || !res?.data?.completedTaskIds) return;
+        const completedIds = new Set(res.data.completedTaskIds);
+        if (completedIds.size === 0) return;
+
+        setRoadmap((prev) => {
+          if (!prev) return prev;
+          let totalTasks = 0;
+          let completedCount = 0;
+
+          const updatedStages = prev.stages.map((stage) => {
+            const updatedTasks = stage.tasks.map((task) => {
+              const isCompleted = completedIds.has(task.id) || task.isCompleted;
+              if (isCompleted) completedCount++;
+              return { ...task, isCompleted };
+            });
+            totalTasks += updatedTasks.length;
+            return { ...stage, tasks: updatedTasks };
+          });
+
+          const overallProgress = totalTasks > 0 ? Math.round((completedCount / totalTasks) * 100) : 0;
+          return {
+            ...prev,
+            stages: updatedStages,
+            overallProgress,
+          };
+        });
+      })
+      .catch((err) => {
+        console.warn('Roadmap hydration notice:', err?.message);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.id, targetDomain, targetRole]);
+
   // Persist state changes to user-scoped storage
   useEffect(() => {
     if (user) {
@@ -414,6 +464,22 @@ export const StudentProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (user) {
       const resolved = resolveDomainTrack(roadmap.targetRole || targetRole);
       StorageService.saveUserRoadmap(user.id, updatedRoadmap, resolved.trackKey);
+
+      if (user.role === 'student') {
+        const completedTaskIds = updatedStages
+          .flatMap(s => s.tasks)
+          .filter(t => t.isCompleted)
+          .map(t => t.id);
+
+        apiClient
+          .put('/api/roadmap', {
+            trackKey: resolved.trackKey,
+            completedTaskIds,
+          })
+          .catch((err) => {
+            console.warn('Failed to sync roadmap progress to backend:', err?.message);
+          });
+      }
     }
   };
 
@@ -654,12 +720,15 @@ export const StudentProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (!targetRole || targetRole === 'Not selected yet') {
       return null;
     }
-    if (assessedSkillsCount === 0) {
+    if (assessedSkillsCount === 0 && (!assessmentHistory || assessmentHistory.length === 0)) {
       return null;
     }
 
     const requirements = getRoleRequirements(targetRole);
     if (!requirements || requirements.requiredSkills.length === 0) {
+      if (assessmentHistory && assessmentHistory.length > 0) {
+        return assessmentHistory[0].overallScore;
+      }
       return null;
     }
 
@@ -675,8 +744,12 @@ export const StudentProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return acc + Math.min(item.requiredProficiency, studentSkill ? studentSkill.proficiencyLevel : 0);
     }, 0);
 
-    return Math.round((studentPoints / totalRequiredPoints) * 100);
-  }, [targetRole, skills, assessedSkillsCount]);
+    const calculated = Math.round((studentPoints / totalRequiredPoints) * 100);
+    if (calculated === 0 && assessmentHistory && assessmentHistory.length > 0) {
+      return assessmentHistory[0].overallScore;
+    }
+    return calculated;
+  }, [targetRole, skills, assessedSkillsCount, assessmentHistory]);
 
   return (
     <StudentContext.Provider

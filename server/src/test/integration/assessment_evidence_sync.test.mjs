@@ -142,7 +142,7 @@ describe('Stage 2: Assessment & Skill Evidence Synchronization Integration', () 
 
   test('5. Recruiter verification queue surfaces evidence and review updates candidate passport', () => {
     initDb();
-    const pendingList = verificationService.getPendingVerifications();
+    const pendingList = verificationService.getPendingVerifications(null, { limit: 200 });
     const candidateItem = pendingList.find(item => item.candidate_id === testStudentId);
     assert.ok(candidateItem, 'Evidence must appear in recruiter pending verification queue');
     assert.strictEqual(candidateItem.verification_status, 'pending_review');

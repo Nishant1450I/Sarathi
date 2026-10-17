@@ -29,11 +29,12 @@ import {
   getQuestionsForDomainAndRole,
   getPracticalTasksForDomain
 } from '../../data/mockAssessments';
-import { getRoleRequirements, getDomainByRoleTitle } from '../../data/domainsCatalog';
+import { getRoleRequirements, getDomainByRoleTitle, techDomains } from '../../data/domainsCatalog';
 import { useStudent } from '../../context/StudentContext';
 import type { AssessmentQuestion, PracticalTask, AssessmentResult, SkillScoreBreakdown } from '../../types/assessment';
+import { AssessmentV2Shell } from '../../components/assessment/AssessmentV2Shell';
 
-export const AssessmentPage: React.FC = () => {
+const LegacyAssessmentPage: React.FC = () => {
   const {
     targetDomain,
     setTargetDomain,
@@ -984,3 +985,24 @@ export const AssessmentPage: React.FC = () => {
     </div>
   );
 };
+
+export const AssessmentPage: React.FC = () => {
+  const isV2 = import.meta.env.VITE_ASSESSMENT_V2 === 'true';
+  const { targetDomain, targetRole } = useStudent();
+
+  if (isV2) {
+    const curDomainId = targetDomain || 'web-dev';
+    const curDomain = techDomains.find(d => d.id === curDomainId);
+    const domainTitle = curDomain?.title || 'Web Development';
+    return (
+      <AssessmentV2Shell
+        domainId={curDomainId}
+        domainTitle={domainTitle}
+        roleTitle={targetRole || 'Full-Stack Developer'}
+      />
+    );
+  }
+
+  return <LegacyAssessmentPage />;
+};
+

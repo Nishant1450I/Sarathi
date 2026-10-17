@@ -1,9 +1,25 @@
+import { z } from 'zod';
 import { Router } from 'express';
 import { authService } from '../services/authService.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
+import { validateBody } from '../middleware/validate.js';
 import { auth as authConfig, app as appConfig } from '../config/index.js';
 
 const router = Router();
+
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, 'Current password is required'),
+  newPassword: z.string().min(8, 'New password must be at least 8 characters long'),
+});
+
+const forgotPasswordSchema = z.object({
+  email: z.string().email('Please enter a valid email address'),
+});
+
+const resetPasswordSchema = z.object({
+  token: z.string().min(1, 'Reset token is required'),
+  newPassword: z.string().min(8, 'New password must be at least 8 characters long'),
+});
 
 router.get('/mode', (req, res) => {
   res.json({
@@ -148,6 +164,36 @@ router.get('/me', requireAuth, async (req, res, next) => {
       activeOrgId: req.orgId,
       organizations: orgs,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/change-password', requireAuth, validateBody(changePasswordSchema), async (req, res, next) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    const result = await authService.changePassword(req.user.id, currentPassword, newPassword);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/forgot-password', validateBody(forgotPasswordSchema), async (req, res, next) => {
+  try {
+    const { email } = req.body;
+    const result = await authService.createPasswordResetToken(email);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/reset-password', validateBody(resetPasswordSchema), async (req, res, next) => {
+  try {
+    const { token, newPassword } = req.body;
+    const result = await authService.resetPasswordWithToken(token, newPassword);
+    res.json(result);
   } catch (err) {
     next(err);
   }

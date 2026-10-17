@@ -6,6 +6,7 @@ import {
 } from '../services/storageService';
 import { recruiterApi } from '../services/recruiterApiService';
 import { OpportunityService } from '../services/opportunityService';
+import { apiClient } from '../services/apiClient';
 
 interface AuthContextType extends AuthState {
   appMode: 'demo' | 'production';
@@ -37,6 +38,17 @@ const mapBackendUserToProfile = (serverUser: any, organization?: any): UserProfi
     institution: serverUser.institution || (mappedRole === 'student' ? 'National Institute of Technology' : undefined),
     avatarUrl: serverUser.avatarUrl || serverUser.avatar_url,
     targetRole: serverUser.targetRole || serverUser.target_role || 'Full-Stack Developer',
+    headline: serverUser.headline || undefined,
+    bio: serverUser.bio || undefined,
+    degree: serverUser.degree || undefined,
+    graduationYear: serverUser.graduationYear || serverUser.graduation_year || undefined,
+    location: serverUser.location || undefined,
+    githubUrl: serverUser.githubUrl || serverUser.github_url || undefined,
+    linkedinUrl: serverUser.linkedinUrl || serverUser.linkedin_url || undefined,
+    portfolioUrl: serverUser.portfolioUrl || serverUser.portfolio_url || undefined,
+    resumeUrl: serverUser.resumeUrl || serverUser.resume_url || undefined,
+    experienceYears: serverUser.experienceYears ?? serverUser.experience_years ?? undefined,
+    workPreference: serverUser.workPreference || serverUser.work_preference || undefined,
     createdAt: serverUser.createdAt || serverUser.created_at || new Date().toISOString(),
   };
 };
@@ -102,6 +114,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const meData = await meRes.json();
             const activeOrg = meData.organizations?.find((o: any) => o.id === meData.activeOrgId) || meData.organizations?.[0];
             const profile = mapBackendUserToProfile(meData.user, activeOrg);
+            if (profile.role === 'student') {
+              try {
+                const candRes = await fetch('/api/candidates/profile', {
+                  headers: { Authorization: `Bearer ${savedToken}` }
+                });
+                if (candRes.ok) {
+                  const candData = await candRes.json();
+                  if (candData.data) {
+                    Object.assign(profile, mapBackendUserToProfile(candData.data));
+                  }
+                }
+              } catch {
+                // Non-fatal fallback to basic user profile
+              }
+            }
 
             if (isMounted) {
               setUser(profile);
@@ -267,6 +294,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateProfile = async (updates: Partial<UserProfile>) => {
     if (!user) return;
+
+    if (token && user.role === 'student') {
+      try {
+        const res = await apiClient.put<{ success: boolean; data: any; message: string }>(
+          '/api/candidates/profile',
+          updates
+        );
+        if (res?.data) {
+          const merged: UserProfile = {
+            ...user,
+            ...mapBackendUserToProfile(res.data)
+          };
+          setUser(merged);
+          sessionStorage.setItem('sarathi_auth_user', JSON.stringify(merged));
+          return;
+        }
+      } catch (err) {
+        console.error('Failed to save profile to server:', err);
+        throw err;
+      }
+    }
+
     const updatedUser: UserProfile = {
       ...user,
       ...updates

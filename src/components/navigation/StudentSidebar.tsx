@@ -8,6 +8,8 @@ import {
   FolderGit2,
   Briefcase,
   Award,
+  BookOpen,
+  HelpCircle,
   User,
   Settings,
   LogOut,
@@ -15,6 +17,7 @@ import {
   GraduationCap,
   ChevronDown,
   ChevronRight,
+  FileText,
   X
 } from 'lucide-react';
 import { Logo } from '../common/Logo';
@@ -56,7 +59,16 @@ export const studentNavSections: StudentNavSection[] = [
     items: [
       { label: 'Projects & Portfolio', path: '/student/projects', icon: FolderGit2 },
       { label: 'Skill Passport', path: '/student/skill-passport', icon: Award },
+      { label: 'Skill Resume', path: '/student/resume', icon: FileText },
       { label: 'Jobs & Internships', path: '/student/opportunities', icon: Briefcase },
+    ],
+  },
+  {
+    id: 'learning-growth',
+    title: 'Learning & Growth',
+    items: [
+      { label: 'Learning Library', path: '/student/resources', icon: BookOpen },
+      { label: 'Help & Support', path: '/student/help', icon: HelpCircle },
     ],
   },
 ];
@@ -207,7 +219,7 @@ export const StudentSidebar: React.FC<StudentSidebarProps> = ({
         {/* Authorized Multi-Role Switcher (only for accounts explicitly authorized for multiple roles) */}
         {user?.roles && user.roles.length > 1 && (
           <div className="pt-2 border-t border-slate-100 space-y-1">
-            <div className="px-3 mb-1 text-[10px] font-bold text-[#8FA1C0] uppercase tracking-wider">
+            <div className="px-3 mb-1 text-[10px] font-bold text-[#405B8B] uppercase tracking-wider">
               Authorized Portals
             </div>
 

@@ -19,7 +19,8 @@ export type VerificationStatus =
   | 'self-reported' 
   | 'assessment-completed' 
   | 'evidence-submitted' 
-  | 'verified';
+  | 'verified'
+  | 'rejected';
 
 export type ProficiencyLevelLabel = 
   | 'Beginner'

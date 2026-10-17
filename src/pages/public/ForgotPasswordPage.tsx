@@ -1,16 +1,39 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Mail, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { Mail, ArrowLeft, CheckCircle2, AlertCircle } from 'lucide-react';
 import { Logo } from '../../components/common/Logo';
 import { Button } from '../../components/common/Button';
+import { apiClient } from '../../services/apiClient';
 
 export const ForgotPasswordPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [demoResetToken, setDemoResetToken] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (email) setSubmitted(true);
+    if (!email) return;
+
+    setIsLoading(true);
+    setErrorMessage(null);
+
+    try {
+      const res = await apiClient.post<{ success: boolean; message: string; resetToken?: string }>(
+        '/api/auth/forgot-password',
+        { email: email.trim().toLowerCase() }
+      );
+
+      setSubmitted(true);
+      if (res?.resetToken) {
+        setDemoResetToken(res.resetToken);
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Failed to submit reset request. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -22,14 +45,37 @@ export const ForgotPasswordPage: React.FC = () => {
           <p className="text-xs text-[#405B8B] mt-1">Enter your registered email address to receive password reset instructions.</p>
         </div>
 
+        {errorMessage && (
+          <div className="p-3.5 rounded-xl bg-rose-50 text-rose-600 text-xs font-bold border border-rose-200 flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <span>{errorMessage}</span>
+          </div>
+        )}
+
         {submitted ? (
           <div className="p-6 rounded-2xl bg-emerald-50 border border-emerald-200 text-center space-y-3">
             <CheckCircle2 className="w-10 h-10 text-[#16A34A] mx-auto" />
             <h3 className="font-bold text-sm text-[#0B1B43]">Reset Instructions Sent!</h3>
             <p className="text-xs text-[#405B8B]">
-              We have sent an email to <span className="font-bold text-[#0B1B43]">{email}</span> with a secure link to reset your password.
+              If an account exists for <span className="font-bold text-[#0B1B43]">{email}</span>, password reset instructions have been dispatched.
             </p>
-            <div className="pt-2">
+
+            {demoResetToken && (
+              <div className="mt-4 p-3 bg-white border border-emerald-300 rounded-xl text-left space-y-2">
+                <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wide block">
+                  Demo & Local Mode Link
+                </span>
+                <p className="text-xs text-[#405B8B]">Click below to test resetting your password immediately:</p>
+                <Link
+                  to={`/reset-password?token=${demoResetToken}`}
+                  className="inline-block text-xs font-bold text-[#087BFA] hover:underline break-all"
+                >
+                  Proceed to Reset Password
+                </Link>
+              </div>
+            )}
+
+            <div className="pt-3">
               <Link to="/login">
                 <Button variant="secondary" size="sm">Back to Sign In</Button>
               </Link>
@@ -54,8 +100,14 @@ export const ForgotPasswordPage: React.FC = () => {
               </div>
             </div>
 
-            <Button type="submit" variant="primary" size="lg" className="w-full">
-              Send Reset Link
+            <Button
+              type="submit"
+              variant="primary"
+              size="lg"
+              className="w-full"
+              disabled={isLoading || !email}
+            >
+              {isLoading ? 'Sending...' : 'Send Reset Link'}
             </Button>
 
             <div className="text-center pt-2">

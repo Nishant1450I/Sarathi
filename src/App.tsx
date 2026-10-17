@@ -12,6 +12,7 @@ import { LandingPage } from './pages/public/LandingPage';
 import { LoginPage } from './pages/public/LoginPage';
 import { SignupPage } from './pages/public/SignupPage';
 import { ForgotPasswordPage } from './pages/public/ForgotPasswordPage';
+import { ResetPasswordPage } from './pages/public/ResetPasswordPage';
 
 // Student pages
 import { StudentDashboard } from './pages/student/StudentDashboard';
@@ -23,6 +24,10 @@ import { OpportunitiesPage } from './pages/student/OpportunitiesPage';
 import { SkillPassportPage } from './pages/student/SkillPassportPage';
 import { ProfilePage } from './pages/student/ProfilePage';
 import { SettingsPage } from './pages/student/SettingsPage';
+import { ResourcesPage } from './pages/student/ResourcesPage';
+import { HelpPage } from './pages/student/HelpPage';
+import { ResumePage } from './pages/student/ResumePage';
+import { PublicPassportPage } from './pages/public/PublicPassportPage';
 
 // Recruiter enterprise platform pages
 import { RecruiterDashboard } from './pages/recruiter/RecruiterDashboard';
@@ -41,6 +46,7 @@ import { RecruiterSettingsPage } from './pages/recruiter/RecruiterSettingsPage';
 
 // College Dashboard & 404
 import { CollegeDashboard } from './pages/college/CollegeDashboard';
+import { ReviewerAssessmentQueuePage } from './pages/reviewer/ReviewerAssessmentQueuePage';
 import { NotFoundPage } from './pages/NotFoundPage';
 
 export const App: React.FC = () => {
@@ -57,6 +63,8 @@ export const App: React.FC = () => {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/passport/:publicId" element={<PublicPassportPage />} />
 
           {/* Student Portal Routes (Preserved Intact) */}
           <Route path="/student" element={<StudentLayout />}>
@@ -68,6 +76,10 @@ export const App: React.FC = () => {
             <Route path="projects" element={<ProjectsPage />} />
             <Route path="opportunities" element={<OpportunitiesPage />} />
             <Route path="skill-passport" element={<SkillPassportPage />} />
+            <Route path="resources" element={<ResourcesPage />} />
+            <Route path="analytics" element={<Navigate to="/student/dashboard" replace />} />
+            <Route path="resume" element={<ResumePage />} />
+            <Route path="help" element={<HelpPage />} />
             <Route path="profile" element={<ProfilePage />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>
@@ -89,12 +101,14 @@ export const App: React.FC = () => {
             <Route path="company" element={<RecruiterCompanyPage />} />
             <Route path="team" element={<RecruiterTeamPage />} />
             <Route path="settings" element={<RecruiterSettingsPage />} />
+            <Route path="assessments/queue" element={<ReviewerAssessmentQueuePage />} />
           </Route>
 
           {/* College Portal */}
           <Route path="/college" element={<CollegeLayout />}>
             <Route index element={<Navigate to="/college/dashboard" replace />} />
             <Route path="dashboard" element={<CollegeDashboard />} />
+            <Route path="assessments/queue" element={<ReviewerAssessmentQueuePage />} />
           </Route>
 
           {/* Catch-all 404 Route */}

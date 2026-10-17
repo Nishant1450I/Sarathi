@@ -388,5 +388,137 @@ export const candidateService = {
         message: `Submitted ${skillsToProcess.length} skill evidence item(s) for verification.`
       };
     });
+  },
+
+  getCandidateProfile(candidateId) {
+    const user = repository.queryOne(
+      'SELECT id, email, full_name, role, company_name, institution, timezone, avatar_url, created_at, updated_at FROM users WHERE id = ? AND deleted_at IS NULL;',
+      [candidateId]
+    );
+    if (!user) return null;
+
+    let profile = repository.queryOne(
+      'SELECT * FROM candidate_profiles WHERE id = ? AND deleted_at IS NULL;',
+      [candidateId]
+    );
+
+    if (!profile) {
+      const now = new Date().toISOString();
+      repository.execute(
+        `INSERT OR IGNORE INTO candidate_profiles (
+          id, headline, target_role, bio, experience_years, location,
+          work_preference, visibility, created_at, updated_at
+        ) VALUES (?, 'Aspiring Candidate', 'Full-Stack Developer', '', 0, 'India', 'flexible', 'public', ?, ?);`,
+        [candidateId, now, now]
+      );
+      profile = repository.queryOne('SELECT * FROM candidate_profiles WHERE id = ?;', [candidateId]);
+    }
+
+    return {
+      id: user.id,
+      email: user.email,
+      fullName: user.full_name,
+      role: user.role,
+      institution: user.institution || '',
+      avatarUrl: user.avatar_url,
+      headline: profile?.headline || '',
+      targetRole: profile?.target_role || '',
+      bio: profile?.bio || '',
+      experienceYears: profile?.experience_years ?? 0,
+      location: profile?.location || '',
+      workPreference: profile?.work_preference || 'flexible',
+      resumeUrl: profile?.resume_url || '',
+      profileUrl: profile?.profile_url || '',
+      githubUrl: profile?.github_url || '',
+      linkedinUrl: profile?.linkedin_url || '',
+      portfolioUrl: profile?.portfolio_url || '',
+      degree: profile?.degree || '',
+      graduationYear: profile?.graduation_year ?? null,
+      repoCount: profile?.repo_count ?? 0,
+      visibility: profile?.visibility || 'public',
+      createdAt: user.created_at,
+      updatedAt: profile?.updated_at || user.updated_at,
+    };
+  },
+
+  updateCandidateProfile(candidateId, updates = {}) {
+    const now = new Date().toISOString();
+
+    return repository.transaction(repo => {
+      const user = repo.queryOne('SELECT * FROM users WHERE id = ? AND deleted_at IS NULL;', [candidateId]);
+      if (!user) {
+        throw new Error('User not found');
+      }
+
+      if (updates.fullName !== undefined || updates.institution !== undefined) {
+        const newFullName = updates.fullName !== undefined ? updates.fullName.trim() : user.full_name;
+        const newInstitution = updates.institution !== undefined ? updates.institution.trim() : user.institution;
+        repo.execute(
+          'UPDATE users SET full_name = ?, institution = ?, updated_at = ? WHERE id = ?;',
+          [newFullName, newInstitution, now, candidateId]
+        );
+      }
+
+      let profile = repo.queryOne('SELECT * FROM candidate_profiles WHERE id = ?;', [candidateId]);
+      if (!profile) {
+        repo.execute(
+          `INSERT INTO candidate_profiles (
+            id, headline, target_role, bio, experience_years, location,
+            work_preference, visibility, created_at, updated_at
+          ) VALUES (?, '', '', '', 0, '', 'flexible', 'public', ?, ?);`,
+          [candidateId, now, now]
+        );
+        profile = repo.queryOne('SELECT * FROM candidate_profiles WHERE id = ?;', [candidateId]);
+      }
+
+      const newHeadline = updates.headline !== undefined ? updates.headline : profile.headline;
+      const newTargetRole = updates.targetRole !== undefined ? updates.targetRole : profile.target_role;
+      const newBio = updates.bio !== undefined ? updates.bio : profile.bio;
+      const newExperience = updates.experienceYears !== undefined ? Number(updates.experienceYears) : profile.experience_years;
+      const newLocation = updates.location !== undefined ? updates.location : profile.location;
+      const newWorkPref = updates.workPreference !== undefined ? updates.workPreference : profile.work_preference;
+      const newGithub = updates.githubUrl !== undefined ? updates.githubUrl : profile.github_url;
+      const newLinkedin = updates.linkedinUrl !== undefined ? updates.linkedinUrl : profile.linkedin_url;
+      const newPortfolio = updates.portfolioUrl !== undefined ? updates.portfolioUrl : profile.portfolio_url;
+      const newResume = updates.resumeUrl !== undefined ? updates.resumeUrl : profile.resume_url;
+      const newDegree = updates.degree !== undefined ? updates.degree : profile.degree;
+      const newGradYear = updates.graduationYear !== undefined ? (updates.graduationYear ? Number(updates.graduationYear) : null) : profile.graduation_year;
+
+      repo.execute(
+        `UPDATE candidate_profiles SET
+          headline = ?,
+          target_role = ?,
+          bio = ?,
+          experience_years = ?,
+          location = ?,
+          work_preference = ?,
+          github_url = ?,
+          linkedin_url = ?,
+          portfolio_url = ?,
+          resume_url = ?,
+          degree = ?,
+          graduation_year = ?,
+          updated_at = ?
+        WHERE id = ?;`,
+        [
+          newHeadline,
+          newTargetRole,
+          newBio,
+          newExperience,
+          newLocation,
+          newWorkPref,
+          newGithub,
+          newLinkedin,
+          newPortfolio,
+          newResume,
+          newDegree,
+          newGradYear,
+          now,
+          candidateId
+        ]
+      );
+
+      return this.getCandidateProfile(candidateId);
+    });
   }
 };

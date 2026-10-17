@@ -7,7 +7,7 @@
 //  - Timestamps are ISO-8601 UTC.
 //  - Multi-tenant RBAC and candidate privacy boundaries are enforced at the schema and service level.
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 4;
 
 export const ddl = `
 -- ============ ORGANISATIONS ============
@@ -63,7 +63,10 @@ CREATE TABLE IF NOT EXISTS candidate_profiles (
   resume_url       TEXT,
   profile_url      TEXT,
   github_url       TEXT,
+  linkedin_url     TEXT,
   portfolio_url    TEXT,
+  degree           TEXT,
+  graduation_year  INTEGER,
   repo_count       INTEGER DEFAULT 0,
   visibility       TEXT NOT NULL DEFAULT 'public',
   consent_at       TEXT,
@@ -396,6 +399,209 @@ CREATE TABLE IF NOT EXISTS audit_events (
   created_at    TEXT NOT NULL
 );
 
+-- ============ STUDENT ROADMAPS ============
+CREATE TABLE IF NOT EXISTS student_roadmaps (
+  id                 TEXT PRIMARY KEY,
+  user_id            TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  track_key          TEXT NOT NULL,
+  completed_task_ids TEXT NOT NULL DEFAULT '[]',
+  updated_at         TEXT NOT NULL,
+  UNIQUE(user_id, track_key)
+);
+
+-- ============ USER SETTINGS ============
+CREATE TABLE IF NOT EXISTS user_settings (
+  user_id            TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  email_digest       INTEGER NOT NULL DEFAULT 1,
+  roadmap_reminders  INTEGER NOT NULL DEFAULT 1,
+  job_alerts         INTEGER NOT NULL DEFAULT 1,
+  updated_at         TEXT NOT NULL
+);
+
+-- ============ PASSWORD RESETS ============
+CREATE TABLE IF NOT EXISTS password_resets (
+  id         TEXT PRIMARY KEY,
+  user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  used_at    TEXT
+);
+
+-- ============ PASSPORT SHARES ============
+CREATE TABLE IF NOT EXISTS passport_shares (
+  user_id    TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  public_id  TEXT NOT NULL UNIQUE,
+  is_public  INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL
+);
+
+-- ============ LEARNING RESOURCES ============
+CREATE TABLE IF NOT EXISTS learning_resources (
+  id          TEXT PRIMARY KEY,
+  domain      TEXT NOT NULL,
+  skill_tags  TEXT NOT NULL DEFAULT '[]',
+  title       TEXT NOT NULL,
+  provider    TEXT NOT NULL,
+  type        TEXT NOT NULL DEFAULT 'course',
+  url         TEXT NOT NULL,
+  is_free     INTEGER NOT NULL DEFAULT 1,
+  level       TEXT NOT NULL DEFAULT 'Beginner',
+  duration    TEXT NOT NULL DEFAULT '',
+  language    TEXT NOT NULL DEFAULT 'English',
+  created_at  TEXT NOT NULL
+);
+
+-- ============ RESOURCE BOOKMARKS ============
+CREATE TABLE IF NOT EXISTS resource_bookmarks (
+  user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  resource_id TEXT NOT NULL REFERENCES learning_resources(id) ON DELETE CASCADE,
+  created_at  TEXT NOT NULL,
+  PRIMARY KEY (user_id, resource_id)
+);
+
+-- ============ RESOURCE PROGRESS ============
+CREATE TABLE IF NOT EXISTS resource_progress (
+  user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  resource_id TEXT NOT NULL REFERENCES learning_resources(id) ON DELETE CASCADE,
+  status      TEXT NOT NULL DEFAULT 'not_started',
+  updated_at  TEXT NOT NULL,
+  PRIMARY KEY (user_id, resource_id)
+);
+
+-- ============ NOTIFICATIONS ============
+CREATE TABLE IF NOT EXISTS notifications (
+  id         TEXT PRIMARY KEY,
+  user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  type       TEXT NOT NULL DEFAULT 'info',
+  title      TEXT NOT NULL,
+  body       TEXT NOT NULL,
+  link       TEXT,
+  is_read    INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL
+);
+
+-- ============ FEEDBACK ============
+CREATE TABLE IF NOT EXISTS feedback (
+  id         TEXT PRIMARY KEY,
+  user_id    TEXT REFERENCES users(id) ON DELETE SET NULL,
+  category   TEXT NOT NULL,
+  message    TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+-- ============ V2 ASSESSMENT SYSTEM ============
+CREATE TABLE IF NOT EXISTS assessment_questions (
+  id           TEXT PRIMARY KEY,
+  version      INTEGER NOT NULL DEFAULT 1,
+  domain_id    TEXT NOT NULL,
+  skill_id     TEXT NOT NULL,
+  type         TEXT NOT NULL CHECK(type IN ('mcq', 'code', 'sql', 'project')),
+  difficulty   INTEGER NOT NULL CHECK(difficulty IN (1, 2, 3)),
+  prompt       TEXT NOT NULL,
+  options      TEXT DEFAULT '[]',
+  correct      TEXT DEFAULT '{}',
+  explanation  TEXT,
+  starter_code TEXT,
+  language     TEXT,
+  status       TEXT NOT NULL DEFAULT 'active',
+  created_at   TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS code_tests (
+  id              TEXT PRIMARY KEY,
+  question_id     TEXT NOT NULL REFERENCES assessment_questions(id) ON DELETE CASCADE,
+  kind            TEXT NOT NULL CHECK(kind IN ('visible', 'hidden')),
+  input           TEXT NOT NULL,
+  expected_output TEXT NOT NULL,
+  weight          REAL NOT NULL DEFAULT 1.0,
+  timeout_ms      INTEGER NOT NULL DEFAULT 3000
+);
+
+CREATE TABLE IF NOT EXISTS project_rubrics (
+  id          TEXT PRIMARY KEY,
+  question_id TEXT NOT NULL REFERENCES assessment_questions(id) ON DELETE CASCADE,
+  criteria    TEXT NOT NULL DEFAULT '[]'
+);
+
+CREATE TABLE IF NOT EXISTS assessment_sessions (
+  id                 TEXT PRIMARY KEY,
+  user_id            TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  mode               TEXT NOT NULL CHECK(mode IN ('practice', 'secure')),
+  domain_id          TEXT NOT NULL,
+  role               TEXT NOT NULL,
+  question_ids       TEXT NOT NULL DEFAULT '[]',
+  bank_version       INTEGER NOT NULL DEFAULT 1,
+  status             TEXT NOT NULL DEFAULT 'in_progress' CHECK(status IN ('in_progress', 'submitted', 'graded', 'expired')),
+  started_at         TEXT NOT NULL,
+  expires_at         TEXT NOT NULL,
+  deadline_at        TEXT,
+  save_version       INTEGER NOT NULL DEFAULT 1,
+  submitted_at       TEXT,
+  consent_json       TEXT DEFAULT '{}',
+  accommodation_json TEXT DEFAULT '{}',
+  engine_version     TEXT NOT NULL DEFAULT 'v2'
+);
+
+CREATE TABLE IF NOT EXISTS submission_snapshots (
+  id          TEXT PRIMARY KEY,
+  session_id  TEXT NOT NULL REFERENCES assessment_sessions(id) ON DELETE CASCADE,
+  question_id TEXT NOT NULL REFERENCES assessment_questions(id) ON DELETE CASCADE,
+  code        TEXT NOT NULL,
+  language    TEXT NOT NULL,
+  reason      TEXT NOT NULL CHECK(reason IN ('autosave', 'run', 'submit')),
+  created_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS run_results (
+  id             TEXT PRIMARY KEY,
+  session_id     TEXT NOT NULL REFERENCES assessment_sessions(id) ON DELETE CASCADE,
+  question_id    TEXT NOT NULL REFERENCES assessment_questions(id) ON DELETE CASCADE,
+  visible_passed INTEGER NOT NULL DEFAULT 0,
+  visible_total  INTEGER NOT NULL DEFAULT 0,
+  status         TEXT NOT NULL,
+  stdout         TEXT DEFAULT '',
+  stderr         TEXT DEFAULT '',
+  time_ms        INTEGER NOT NULL DEFAULT 0,
+  created_at     TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS explanation_answers (
+  id           TEXT PRIMARY KEY,
+  session_id   TEXT NOT NULL REFERENCES assessment_sessions(id) ON DELETE CASCADE,
+  question_id  TEXT NOT NULL REFERENCES assessment_questions(id) ON DELETE CASCADE,
+  text         TEXT NOT NULL,
+  rubric_score REAL DEFAULT 0,
+  needs_review INTEGER NOT NULL DEFAULT 0,
+  created_at   TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS session_scores (
+  session_id      TEXT PRIMARY KEY REFERENCES assessment_sessions(id) ON DELETE CASCADE,
+  technical_score REAL NOT NULL DEFAULT 0,
+  knowledge_score REAL NOT NULL DEFAULT 0,
+  practical_score REAL NOT NULL DEFAULT 0,
+  rubric_json     TEXT NOT NULL DEFAULT '{}',
+  skill_scores    TEXT NOT NULL DEFAULT '{}',
+  graded_at       TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS integrity_events (
+  id         TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL REFERENCES assessment_sessions(id) ON DELETE CASCADE,
+  type       TEXT NOT NULL,
+  ts         TEXT NOT NULL,
+  meta       TEXT NOT NULL DEFAULT '{}'
+);
+
+CREATE TABLE IF NOT EXISTS integrity_reviews (
+  id          TEXT PRIMARY KEY,
+  session_id  TEXT NOT NULL REFERENCES assessment_sessions(id) ON DELETE CASCADE,
+  reviewer_id TEXT NOT NULL REFERENCES users(id),
+  decision    TEXT NOT NULL CHECK(decision IN ('no_concern', 'needs_followup', 'concern_confirmed')),
+  note        TEXT NOT NULL,
+  created_at  TEXT NOT NULL
+);
+
 -- ============ INDEXES ============
 CREATE INDEX IF NOT EXISTS idx_memberships_user ON organisation_memberships(user_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_org_status ON jobs(org_id, status);
@@ -407,4 +613,16 @@ CREATE INDEX IF NOT EXISTS idx_applications_org_job ON applications(org_id, job_
 CREATE INDEX IF NOT EXISTS idx_applications_candidate ON applications(candidate_id);
 CREATE INDEX IF NOT EXISTS idx_interviews_org_date ON interviews(org_id, scheduled_at);
 CREATE INDEX IF NOT EXISTS idx_audit_org_action ON audit_events(org_id, action, created_at);
+CREATE INDEX IF NOT EXISTS idx_student_roadmaps_user ON student_roadmaps(user_id);
+CREATE INDEX IF NOT EXISTS idx_password_resets_user ON password_resets(user_id);
+CREATE INDEX IF NOT EXISTS idx_password_resets_token ON password_resets(token_hash);
+CREATE INDEX IF NOT EXISTS idx_passport_shares_pub ON passport_shares(public_id);
+CREATE INDEX IF NOT EXISTS idx_learning_resources_domain ON learning_resources(domain);
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, is_read);
+CREATE INDEX IF NOT EXISTS idx_assessment_sessions_user ON assessment_sessions(user_id, status);
+CREATE INDEX IF NOT EXISTS idx_assessment_sessions_domain ON assessment_sessions(domain_id);
+CREATE INDEX IF NOT EXISTS idx_integrity_events_session ON integrity_events(session_id);
+CREATE INDEX IF NOT EXISTS idx_integrity_reviews_session ON integrity_reviews(session_id);
+CREATE INDEX IF NOT EXISTS idx_assessment_questions_domain ON assessment_questions(domain_id, skill_id);
+
 `;
