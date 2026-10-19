@@ -1,5 +1,5 @@
 export type AssessmentMode = 'practice' | 'secure';
-export type SessionStatus = 'in_progress' | 'submitted' | 'graded' | 'expired';
+export type SessionStatus = 'in_progress' | 'submitted' | 'graded' | 'expired' | 'abandoned';
 export type V2QuestionType = 'mcq' | 'code' | 'sql' | 'project';
 
 export interface CodeTestVisible {
@@ -61,6 +61,8 @@ export interface AssessmentSessionClient {
   questions: V2QuestionClient[];
   rules: SessionRules;
   accommodation?: SessionAccommodation;
+  draftAnswers?: Record<string, any>;
+  snapshots?: Record<string, any>;
 }
 
 export interface SkillScoreV2 {
@@ -80,6 +82,7 @@ export interface V2SessionResult {
   mode: AssessmentMode;
   domainId: string;
   role: string;
+  overallScore?: number;
   technicalScore: number;
   knowledgeScore: number;
   practicalScore: number;
@@ -103,16 +106,20 @@ export interface V2SessionResult {
     isCorrect: boolean;
     explanation: string;
   }[];
-  practicalSummary: {
+  hasInfrastructureError?: boolean;
+  practicalSummary?: {
     taskId: string;
     taskTitle: string;
     skillName: string;
     isPassed: boolean;
+    isInfrastructureError?: boolean;
+    executionStatus?: string;
     feedback: string;
     visiblePassed?: number;
     visibleTotal?: number;
     hiddenPassed?: number;
     hiddenTotal?: number;
+    score?: number;
   }[];
   integritySummary?: {
     eventCount: number;

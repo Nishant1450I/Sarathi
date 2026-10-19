@@ -138,46 +138,59 @@ export const OpportunitiesPanel: React.FC<OpportunitiesPanelProps> = ({
             <Badge variant="purple">AI Matched</Badge>
           </div>
 
-          <div className="space-y-3 pt-1">
-            {topJobMatches.slice(0, 3).map((job) => (
-              <div
-                key={job.id}
-                className="p-3.5 rounded-2xl bg-white border border-[#E0E7F2] hover:border-[#087BFA] hover:shadow-xs transition-all space-y-2 cursor-pointer"
-                onClick={() => onNavigate('/student/opportunities')}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <h4 className="text-xs font-black text-[#0B1B43] hover:text-[#087BFA] transition-colors">
-                      {job.title}
-                    </h4>
-                    <div className="flex items-center gap-2 text-[11px] text-[#405B8B] mt-0.5">
-                      <span className="flex items-center gap-1">
-                        <Building2 className="w-3 h-3 text-slate-400" />
-                        <span>{job.company}</span>
-                      </span>
-                      <span>•</span>
-                      <span className="flex items-center gap-1">
-                        <MapPin className="w-3 h-3 text-slate-400" />
-                        <span>{job.location}</span>
-                      </span>
+          {topJobMatches.length === 0 ? (
+            <div className="h-64 flex flex-col items-center justify-center text-center p-6 space-y-3 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+              <Building2 className="w-8 h-8 text-slate-400" />
+              <div>
+                <p className="text-xs font-bold text-[#0B1B43]">No Matched Opportunities Yet</p>
+                <p className="text-[11px] text-[#405B8B]">Complete your diagnostic assessment to calibrate employer job matches.</p>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => onNavigate('/student/opportunities')}>
+                Browse All Openings
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-3 pt-1">
+              {topJobMatches.slice(0, 3).map((job) => (
+                <div
+                  key={job.id}
+                  className="p-3.5 rounded-2xl bg-white border border-[#E0E7F2] hover:border-[#087BFA] hover:shadow-xs transition-all space-y-2 cursor-pointer"
+                  onClick={() => onNavigate('/student/opportunities')}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h4 className="text-xs font-black text-[#0B1B43] hover:text-[#087BFA] transition-colors">
+                        {job.title}
+                      </h4>
+                      <div className="flex items-center gap-2 text-[11px] text-[#405B8B] mt-0.5">
+                        <span className="flex items-center gap-1">
+                          <Building2 className="w-3 h-3 text-slate-400" />
+                          <span>{job.company}</span>
+                        </span>
+                        <span>•</span>
+                        <span className="flex items-center gap-1">
+                          <MapPin className="w-3 h-3 text-slate-400" />
+                          <span>{job.location}</span>
+                        </span>
+                      </div>
                     </div>
+
+                    <span className="px-2 py-0.5 rounded-full text-xs font-black bg-blue-50 text-[#087BFA] border border-blue-200">
+                      {job.matchScore}% Match
+                    </span>
                   </div>
 
-                  <span className="px-2 py-0.5 rounded-full text-xs font-black bg-blue-50 text-[#087BFA] border border-blue-200">
-                    {job.matchScore}% Match
-                  </span>
+                  <div className="flex items-center justify-between text-[11px] pt-1 border-t border-slate-100 text-[#405B8B]">
+                    <span>{job.salary} • {job.type}</span>
+                    <span className="text-[#087BFA] font-bold flex items-center gap-0.5">
+                      <span>View Role</span>
+                      <ArrowRight className="w-3 h-3" />
+                    </span>
+                  </div>
                 </div>
-
-                <div className="flex items-center justify-between text-[11px] pt-1 border-t border-slate-100 text-[#405B8B]">
-                  <span>{job.salary} • {job.type}</span>
-                  <span className="text-[#087BFA] font-bold flex items-center gap-0.5">
-                    <span>View Role</span>
-                    <ArrowRight className="w-3 h-3" />
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </Card>
       </div>
     </div>

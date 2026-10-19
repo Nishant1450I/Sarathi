@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useStudent } from '../../context/StudentContext';
 import { AssessmentV2Service } from '../../services/assessmentV2Service';
 import { toLegacyAssessmentResult } from '../../adapters/toLegacyAssessmentResult';
-import type { AssessmentMode, AssessmentSessionClient, V2SessionResult } from '../../types/assessmentV2';
-import { ModeSelect } from './ModeSelect';
+import type { AssessmentMode, V2SessionResult } from '../../types/assessmentV2';
+import { UnifiedAssessmentStart } from './UnifiedAssessmentStart';
 import { RulesConsent } from './RulesConsent';
 import { ResultsReport } from './ResultsReport';
-import { SkillGapPlan } from './SkillGapPlan';
 import { ActiveAssessmentEngine } from './ActiveAssessmentEngine';
+import { useAssessmentRecovery } from './shell/useAssessmentRecovery';
+import { AssessmentShellLoading, AssessmentShellError } from './shell/AssessmentShellFeedback';
 
 interface AssessmentV2ShellProps {
   domainId: string;
@@ -17,37 +18,54 @@ interface AssessmentV2ShellProps {
   roleTitle: string;
 }
 
-export const AssessmentV2Shell: React.FC<AssessmentV2ShellProps> = ({
-  domainId,
-  domainTitle,
-  roleTitle,
-}) => {
-  const { user } = useAuth();
+export const AssessmentV2Shell: React.FC<AssessmentV2ShellProps> = ({ domainId, domainTitle, roleTitle }) => {
+  const { user, isLoading: isAuthLoading } = useAuth();
   const { recordFullAssessmentResult } = useStudent();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  const [step, setStep] = useState<'mode_select' | 'consent' | 'assessment' | 'results'>('mode_select');
-  const [selectedMode, setSelectedMode] = useState<AssessmentMode>('practice');
-  const [session, setSession] = useState<AssessmentSessionClient | null>(null);
   const [isInitializing, setIsInitializing] = useState(false);
-  const [initError, setInitError] = useState<string | null>(null);
-  const [finalResult, setFinalResult] = useState<V2SessionResult | null>(null);
+  const [pendingAccommodations, setPendingAccommodations] = useState<any>(null);
+
+  const attemptIdFromUrl = searchParams.get('attemptId') || searchParams.get('id');
+
+  const {
+    step,
+    setStep,
+    selectedMode,
+    setSelectedMode,
+    session,
+    setSession,
+    isRecovering,
+    setIsRecovering,
+    initError,
+    setInitError,
+    errorType,
+    finalResult,
+    setFinalResult,
+    latestCompletedResult,
+    setLatestCompletedResult,
+  } = useAssessmentRecovery({
+    domainId,
+    user,
+    isAuthLoading,
+    attemptIdFromUrl,
+    setSearchParams,
+  });
 
   const startSession = async (mode: AssessmentMode, consentData?: any) => {
     try {
       setIsInitializing(true);
       setInitError(null);
+      sessionStorage.removeItem('sarathi_v2_retaking');
       const newSession = await AssessmentV2Service.createSession(
-        {
-          mode,
-          domainId,
-          role: roleTitle,
-          consent: consentData,
-          accommodation: consentData?.accommodations,
-        },
+        { mode, domainId, role: roleTitle, consent: consentData, accommodation: consentData?.accommodations },
         user || undefined
       );
+      sessionStorage.setItem('sarathi_v2_active_session_id', newSession.sessionId);
+      sessionStorage.setItem('sarathi_v2_active_mode', newSession.mode);
       setSession(newSession);
+      setSelectedMode(newSession.mode);
       setStep('assessment');
     } catch (err: any) {
       setInitError(err.message || 'Failed to start assessment session.');
@@ -57,28 +75,79 @@ export const AssessmentV2Shell: React.FC<AssessmentV2ShellProps> = ({
   };
 
   const handleAssessmentSubmitted = (result: V2SessionResult) => {
+    sessionStorage.removeItem('sarathi_v2_active_session_id');
+    sessionStorage.removeItem('sarathi_v2_active_mode');
+    sessionStorage.removeItem('sarathi_v2_retaking');
+    sessionStorage.setItem('sarathi_v2_last_completed_attempt_id', result.sessionId);
+    setSearchParams({ attemptId: result.sessionId }, { replace: true });
     setFinalResult(result);
+    setLatestCompletedResult(result);
     setStep('results');
     try {
-      const legacyResult = toLegacyAssessmentResult(result);
-      recordFullAssessmentResult(legacyResult);
-    } catch (err: any) {
-      console.warn('[AssessmentV2Shell] Legacy record sync warning:', err.message);
-    }
+      recordFullAssessmentResult(toLegacyAssessmentResult(result));
+    } catch {}
   };
 
-  if (step === 'mode_select') {
+  const handleRetake = () => {
+    sessionStorage.removeItem('sarathi_v2_active_session_id');
+    sessionStorage.removeItem('sarathi_v2_active_mode');
+    sessionStorage.removeItem('sarathi_v2_last_completed_attempt_id');
+    sessionStorage.setItem('sarathi_v2_retaking', 'true');
+    const newParams = new URLSearchParams(searchParams);
+    newParams.delete('attemptId');
+    newParams.delete('id');
+    setSearchParams(newParams, { replace: true });
+    setSession(null);
+    setFinalResult(null);
+    setStep('briefing');
+  };
+
+  if ((isRecovering || isAuthLoading) && !session && !latestCompletedResult && !initError) {
+    return <AssessmentShellLoading />;
+  }
+
+  if (initError && !session && !latestCompletedResult) {
     return (
-      <ModeSelect
+      <AssessmentShellError
+        errorType={errorType}
+        initError={initError}
+        onSignInAgain={() => navigate('/login?returnTo=' + encodeURIComponent(window.location.pathname + window.location.search))}
+        onRetry={() => { setInitError(null); setIsRecovering(true); }}
+        onStartNew={() => { setInitError(null); handleRetake(); }}
+      />
+    );
+  }
+
+  if (step === 'results' && finalResult) {
+    return (
+      <div className="max-w-6xl mx-auto py-8 px-4">
+        <ResultsReport
+          result={finalResult}
+          domainTitle={domainTitle}
+          roleTitle={roleTitle}
+          inProgressSessionId={session?.status === 'in_progress' ? session.sessionId : null}
+          onResumeInProgress={() => setStep('assessment')}
+          onRetake={handleRetake}
+          onNavigateRoadmap={() => navigate('/student/roadmap')}
+          onNavigateSkillGap={() => navigate('/student/skill-gap')}
+        />
+      </div>
+    );
+  }
+
+  if (step === 'briefing') {
+    return (
+      <UnifiedAssessmentStart
         selectedMode={selectedMode}
         onSelectMode={setSelectedMode}
         domainTitle={domainTitle}
         roleTitle={roleTitle}
-        onContinue={() => {
+        onContinue={(accommodation) => {
+          setPendingAccommodations(accommodation);
           if (selectedMode === 'secure') {
             setStep('consent');
           } else {
-            startSession('practice');
+            startSession('practice', { accommodations: accommodation });
           }
         }}
       />
@@ -90,51 +159,22 @@ export const AssessmentV2Shell: React.FC<AssessmentV2ShellProps> = ({
       <RulesConsent
         domainTitle={domainTitle}
         roleTitle={roleTitle}
+        initialAccommodations={pendingAccommodations}
         isStarting={isInitializing}
-        onBack={() => setStep('mode_select')}
-        onConsentAndStart={(consentData) => startSession('secure', consentData)}
+        onBack={() => (latestCompletedResult ? setStep('results') : setStep('briefing'))}
+        onConsentAndStart={(consentData) =>
+          startSession('secure', {
+            ...consentData,
+            accommodations: { ...pendingAccommodations, ...consentData?.accommodations },
+          })
+        }
       />
-    );
-  }
-
-  if (step === 'results' && finalResult) {
-    const weakest = Object.values(finalResult.skillScores || {}).filter(s => s.score < 60);
-    return (
-      <div className="max-w-6xl mx-auto py-8 px-4 space-y-8">
-        <ResultsReport
-          result={finalResult}
-          onRetake={() => setStep('mode_select')}
-          onNavigateRoadmap={() => navigate('/student/roadmap')}
-          onNavigateSkillGap={() => navigate('/student/skill-gap')}
-        />
-        <SkillGapPlan weakestSkills={weakest} />
-      </div>
     );
   }
 
   if (step === 'assessment' && session) {
-    return (
-      <ActiveAssessmentEngine
-        session={session}
-        user={user || undefined}
-        onComplete={handleAssessmentSubmitted}
-      />
-    );
+    return <ActiveAssessmentEngine session={session} user={user || undefined} onComplete={handleAssessmentSubmitted} />;
   }
 
-  return (
-    <div className="max-w-md mx-auto my-20 p-6 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 text-center">
-      {initError ? (
-        <div className="text-xs text-rose-500 mb-4">{initError}</div>
-      ) : (
-        <div className="text-xs text-slate-500 mb-4">Initializing assessment...</div>
-      )}
-      <button
-        onClick={() => setStep('mode_select')}
-        className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-medium cursor-pointer"
-      >
-        Return to Mode Select
-      </button>
-    </div>
-  );
+  return null;
 };

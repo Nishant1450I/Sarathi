@@ -27,13 +27,19 @@ describe('GradingService Unit Tests', () => {
 
   after(() => {
     // Cleanup candidate and test data
+    db.prepare(`DELETE FROM assessment_results WHERE candidate_id = ?`).run(testCandidateId);
+    db.prepare(`DELETE FROM assessment_attempts WHERE candidate_id = ?`).run(testCandidateId);
+    db.prepare(`DELETE FROM assessment_assignments WHERE candidate_id = ?`).run(testCandidateId);
+    db.prepare(`DELETE FROM skill_evidence WHERE candidate_id = ?`).run(testCandidateId);
+    db.prepare(`DELETE FROM skill_evidence_ledger WHERE candidate_id = ?`).run(testCandidateId);
+    db.prepare(`DELETE FROM canonical_skill_profiles WHERE candidate_id = ?`).run(testCandidateId);
     db.prepare(`DELETE FROM assessment_sessions WHERE user_id = ?`).run(testCandidateId);
     db.prepare(`DELETE FROM candidate_skills WHERE candidate_id = ?`).run(testCandidateId);
     db.prepare(`DELETE FROM candidate_profiles WHERE id = ?`).run(testCandidateId);
     db.prepare(`DELETE FROM users WHERE id = ?`).run(testCandidateId);
   });
 
-  it('correctly applies evidence capping and confidence levels', () => {
+  it('correctly applies evidence capping and confidence levels', async () => {
     // 1. Create a session in secure mode
     const session = SessionService.createSession({
       userId: testCandidateId,
@@ -63,7 +69,7 @@ describe('GradingService Unit Tests', () => {
       }
     }
 
-    const graded = GradingService.gradeSession(session.sessionId, testCandidateId, {
+    const graded = await GradingService.gradeSession(session.sessionId, testCandidateId, {
       answers,
       tasks,
     });
@@ -88,7 +94,7 @@ describe('GradingService Unit Tests', () => {
     }
   });
 
-  it('caps practice mode at level 2 (Developing) regardless of score', () => {
+  it('caps practice mode at level 2 (Developing) regardless of score', async () => {
     const session = SessionService.createSession({
       userId: testCandidateId,
       mode: 'practice',
@@ -103,7 +109,7 @@ describe('GradingService Unit Tests', () => {
       answers[q.id] = q.correct?.index ?? 0;
     }
 
-    const graded = GradingService.gradeSession(session.sessionId, testCandidateId, {
+    const graded = await GradingService.gradeSession(session.sessionId, testCandidateId, {
       answers,
     });
 
@@ -112,7 +118,7 @@ describe('GradingService Unit Tests', () => {
     }
   });
 
-  it('preserves existing verified status on candidate_skills', () => {
+  it('preserves existing verified status on candidate_skills', async () => {
     // Manually insert a skill with 'verified' status
     db.prepare(`
       INSERT OR REPLACE INTO candidate_skills (id, candidate_id, skill_id, proficiency, verification_status, source, created_at, updated_at)
@@ -127,7 +133,7 @@ describe('GradingService Unit Tests', () => {
       consent: { agreed: true },
     });
 
-    GradingService.gradeSession(session.sessionId, testCandidateId, {
+    await GradingService.gradeSession(session.sessionId, testCandidateId, {
       answers: {},
     });
 
@@ -139,7 +145,7 @@ describe('GradingService Unit Tests', () => {
     assert.equal(skillRow.proficiency, 4, 'Verified proficiency should not be lowered');
   });
 
-  it('is idempotent on duplicate grading requests', () => {
+  it('is idempotent on duplicate grading requests', async () => {
     const session = SessionService.createSession({
       userId: testCandidateId,
       mode: 'practice',
@@ -147,8 +153,8 @@ describe('GradingService Unit Tests', () => {
       scope: 'quiz_only',
     });
 
-    const firstResult = GradingService.gradeSession(session.sessionId, testCandidateId, { answers: {} });
-    const secondResult = GradingService.gradeSession(session.sessionId, testCandidateId, { answers: {} });
+    const firstResult = await GradingService.gradeSession(session.sessionId, testCandidateId, { answers: {} });
+    const secondResult = await GradingService.gradeSession(session.sessionId, testCandidateId, { answers: {} });
 
     assert.equal(firstResult.sessionId, secondResult.sessionId);
     assert.equal(firstResult.technicalScore, secondResult.technicalScore);

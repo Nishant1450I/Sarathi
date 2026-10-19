@@ -71,7 +71,9 @@ export async function request<T = any>(endpoint: string, options: RequestOptions
   }
 
   if (!skipAuth) {
-    const token = typeof window !== 'undefined' ? sessionStorage.getItem('sarathi_auth_token') : null;
+    const token = typeof window !== 'undefined'
+      ? (sessionStorage.getItem('sarathi_auth_token') || localStorage.getItem('sarathi_auth_token'))
+      : null;
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
@@ -97,6 +99,9 @@ export async function request<T = any>(endpoint: string, options: RequestOptions
         if (typeof window !== 'undefined') {
           sessionStorage.removeItem('sarathi_auth_token');
           sessionStorage.removeItem('sarathi_auth_user');
+          localStorage.removeItem('sarathi_auth_token');
+          localStorage.removeItem('sarathi_auth_user');
+          localStorage.removeItem('sarathi_remember_me');
           window.dispatchEvent(new CustomEvent('sarathi:unauthorized'));
         }
         if (unauthorizedListener) {

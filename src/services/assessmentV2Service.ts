@@ -5,11 +5,14 @@ import { OpportunityService } from './opportunityService';
 export class AssessmentV2Service {
   private static async getAuthHeaders(user?: UserProfile): Promise<HeadersInit> {
     let token: string | null = null;
-    if (user) {
-      token = await OpportunityService.getStudentToken(user);
+    if (typeof window !== 'undefined') {
+      token =
+        sessionStorage.getItem('sarathi_auth_token') ||
+        localStorage.getItem('sarathi_auth_token') ||
+        sessionStorage.getItem('sarathi_candidate_token');
     }
-    if (!token) {
-      token = localStorage.getItem('sarathi_auth_token');
+    if (!token && user) {
+      token = await OpportunityService.getStudentToken(user);
     }
 
     return {
@@ -60,6 +63,50 @@ export class AssessmentV2Service {
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
       throw new Error(err.error?.message || `Failed to resume session (HTTP ${response.status})`);
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Fetch active in-progress assessment session for student
+   */
+  public static async getActiveSession(
+    domainId?: string,
+    user?: UserProfile
+  ): Promise<{ active: boolean; session: AssessmentSessionClient | null }> {
+    const headers = await this.getAuthHeaders(user);
+    const url = domainId
+      ? `/api/assessments/v2/sessions/active?domainId=${encodeURIComponent(domainId)}`
+      : '/api/assessments/v2/sessions/active';
+    const response = await fetch(url, {
+      method: 'GET',
+      headers,
+    });
+
+    if (!response.ok) {
+      return { active: false, session: null };
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Explicitly abandon an active assessment session
+   */
+  public static async abandonSession(
+    sessionId: string,
+    user?: UserProfile
+  ): Promise<{ success: boolean; sessionId: string; status: string }> {
+    const headers = await this.getAuthHeaders(user);
+    const response = await fetch(`/api/assessments/v2/sessions/${encodeURIComponent(sessionId)}/abandon`, {
+      method: 'POST',
+      headers,
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.error?.message || `Failed to abandon session (HTTP ${response.status})`);
     }
 
     return response.json();
@@ -182,6 +229,68 @@ export class AssessmentV2Service {
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
       throw new Error(err.error?.message || `Failed to fetch result (HTTP ${response.status})`);
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Retrieve the latest completed assessment result for the student
+   */
+  public static async getLatestResult(
+    domainId?: string,
+    user?: UserProfile
+  ): Promise<{ success: boolean; result: V2SessionResult | null; notFound?: boolean; error?: string }> {
+    try {
+      const headers = await this.getAuthHeaders(user);
+      const query = domainId ? `?domainId=${encodeURIComponent(domainId)}` : '';
+      const response = await fetch(`/api/assessments/v2/sessions/latest-result${query}`, {
+        method: 'GET',
+        headers,
+      });
+
+      if (response.status === 404) {
+        return { success: true, notFound: true, result: null };
+      }
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        return {
+          success: false,
+          notFound: false,
+          error: err.error?.message || err.message || `Failed to fetch latest result (HTTP ${response.status})`,
+          result: null,
+        };
+      }
+
+      const data = await response.json();
+      return { success: true, notFound: false, result: data.result || null };
+    } catch (err: any) {
+      return {
+        success: false,
+        notFound: false,
+        error: err.message || 'Network error while fetching assessment records.',
+        result: null,
+      };
+    }
+  }
+
+  /**
+   * Retrieve assessment history for the student
+   */
+  public static async getHistory(
+    domainId?: string,
+    user?: UserProfile
+  ): Promise<{ success: boolean; data: any[] }> {
+    const headers = await this.getAuthHeaders(user);
+    const query = domainId ? `?domainId=${encodeURIComponent(domainId)}` : '';
+    const response = await fetch(`/api/assessments/v2/history${query}`, {
+      method: 'GET',
+      headers,
+    });
+
+    if (!response.ok) {
+      return { success: false, data: [] };
     }
 
     return response.json();

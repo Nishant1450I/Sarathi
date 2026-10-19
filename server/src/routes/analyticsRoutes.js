@@ -34,4 +34,40 @@ router.get('/student', requireAuth, async (req, res, next) => {
   }
 });
 
+// College Portal institution-scoped analytics (role-protected)
+router.get('/college', requireAuth, requireRole(['college', 'platform_admin']), async (req, res, next) => {
+  try {
+    const { collegeAnalyticsService } = await import('../services/collegeAnalyticsService.js');
+    const instId = req.user.institution_id || req.query.institutionId;
+    const instName = req.user.institution || req.query.institutionName || 'National Institute of Technology';
+    
+    const data = collegeAnalyticsService.getCollegeAnalytics(instId, instName);
+    res.json({
+      success: true,
+      data,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Link student to college institution
+router.post('/college/link', requireAuth, async (req, res, next) => {
+  try {
+    const { collegeAnalyticsService } = await import('../services/collegeAnalyticsService.js');
+    const { studentId, institutionId } = req.body || {};
+    const targetUserId = req.user.role === 'candidate' ? req.user.id : studentId;
+    const targetInstId = institutionId || req.user.institution_id;
+
+    if (!targetUserId || !targetInstId) {
+      return res.status(400).json({ error: 'studentId and institutionId are required' });
+    }
+
+    const result = collegeAnalyticsService.linkStudentToInstitution(targetUserId, targetInstId);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;

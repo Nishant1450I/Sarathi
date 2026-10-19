@@ -107,6 +107,27 @@ export function runMigrations(dbFile) {
         db.exec("ALTER TABLE resource_progress ADD COLUMN completed_at TEXT;");
       }
     }
+
+    const usersCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='users';").get();
+    if (usersCheck) {
+      const cols = db.prepare("PRAGMA table_info(users);").all();
+      const colNames = new Set(cols.map(c => c.name));
+      if (!colNames.has('status')) {
+        db.exec("ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'active';");
+      }
+      if (!colNames.has('institution_id')) {
+        db.exec("ALTER TABLE users ADD COLUMN institution_id TEXT;");
+      }
+    }
+
+    const roadmapsCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='student_roadmaps';").get();
+    if (roadmapsCheck) {
+      const cols = db.prepare("PRAGMA table_info(student_roadmaps);").all();
+      const colNames = new Set(cols.map(c => c.name));
+      if (!colNames.has('task_progress')) {
+        db.exec("ALTER TABLE student_roadmaps ADD COLUMN task_progress TEXT NOT NULL DEFAULT '{}';");
+      }
+    }
   } catch (err) {
     console.warn('Column migration note:', err.message);
   }

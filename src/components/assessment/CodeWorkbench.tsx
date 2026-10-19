@@ -37,10 +37,33 @@ export const CodeWorkbench: React.FC<CodeWorkbenchProps> = ({
 }) => {
   const [selectedLang, setSelectedLang] = useState<string>(question.language || 'javascript');
 
-  const handleEditorPaste = (e: any) => {
+  const handleEditorBlockedAction = (e: any) => {
     if (!pasteAllowed) {
       if (typeof e?.preventDefault === 'function') e.preventDefault();
+      if (typeof e?.stopPropagation === 'function') e.stopPropagation();
       onPasteBlocked?.();
+    }
+  };
+
+  const handleEditorMount = (editor: any) => {
+    if (!pasteAllowed) {
+      editor.onKeyDown((e: any) => {
+        const isMod = e.ctrlKey || e.metaKey;
+        const keyCodes = [52, 33, 54]; // V, C, X in Monaco
+        const keyNames = ['KeyV', 'KeyC', 'KeyX'];
+        if (isMod && (keyNames.includes(e.code) || keyCodes.includes(e.keyCode))) {
+          e.preventDefault();
+          e.stopPropagation();
+          onPasteBlocked?.();
+        }
+      });
+
+      const domNode = editor.getDomNode();
+      if (domNode) {
+        ['paste', 'copy', 'cut', 'drop'].forEach(evt =>
+          domNode.addEventListener(evt, handleEditorBlockedAction, true)
+        );
+      }
     }
   };
 
@@ -48,34 +71,32 @@ export const CodeWorkbench: React.FC<CodeWorkbenchProps> = ({
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 h-[calc(100vh-14rem)] min-h-[580px]">
       {/* Left Column: Problem Brief & Visible Tests */}
       <div className="lg:col-span-5 flex flex-col gap-4 overflow-y-auto pr-1">
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-sm">
+        <div className="bg-white border border-[#E0E7F2] rounded-xl p-5 shadow-[var(--shadow-card)]">
           <div className="flex items-center justify-between mb-3">
-            <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300">
+            <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-[#EEF2FF] text-[#4F46E5] border border-indigo-200">
               {question.skillName} • Difficulty {question.difficulty}/3
             </span>
-            <span className="text-xs text-slate-500 uppercase tracking-wider font-mono">
-              {question.type}
-            </span>
+            <span className="text-xs text-[#405B8B] uppercase tracking-wider font-mono">{question.type}</span>
           </div>
-          <h2 className="text-base font-bold text-slate-900 dark:text-white mb-2">
-            Task Description
-          </h2>
-          <div className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
+          <h2 className="text-base font-bold text-[#0B1B43] mb-2">Task Description</h2>
+          <div className="text-sm text-[#405B8B] whitespace-pre-wrap leading-relaxed">
             {question.prompt}
           </div>
         </div>
 
         {/* Visible Tests List */}
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-sm flex-1">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">
+        <div className="bg-white border border-[#E0E7F2] rounded-xl p-4 shadow-[var(--shadow-card)] flex-1">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-[#405B8B] mb-3">
             Visible Test Cases ({question.visibleTests?.length || 0})
           </h3>
           <div className="space-y-2.5">
             {question.visibleTests?.map((t, idx) => (
-              <div key={t.id || idx} className="bg-slate-50 dark:bg-slate-950 p-3 rounded-lg border border-slate-200 dark:border-slate-800 text-xs font-mono">
-                <div className="text-slate-400 mb-1 text-[11px]">Test Case #{idx + 1}</div>
-                <div className="text-slate-600 dark:text-slate-400 truncate">Input: {t.input}</div>
-                <div className="text-emerald-600 dark:text-emerald-400 font-semibold mt-1">Expected: {t.expectedOutput}</div>
+              <div key={t.id || idx} className="bg-[#F4F7FC] p-3 rounded-lg border border-[#E0E7F2] text-xs font-mono">
+                <div className="text-[#405B8B] mb-1 text-[11px]">Test Case #{idx + 1}</div>
+                <div className="text-[#0B1B43] truncate">
+                  {question.type === 'sql' ? 'Check:' : 'Input:'} {t.input}
+                </div>
+                <div className="text-[#16A34A] font-semibold mt-1">Expected: {t.expectedOutput}</div>
               </div>
             ))}
           </div>
@@ -84,9 +105,7 @@ export const CodeWorkbench: React.FC<CodeWorkbenchProps> = ({
 
       {/* Right Column: Code Editor & Execution Console */}
       <div className="lg:col-span-7 flex flex-col gap-4">
-        {/* Editor Shell */}
         <div className="bg-slate-950 border border-slate-800 rounded-xl overflow-hidden flex flex-col flex-1 shadow-md">
-          {/* Editor Header Bar */}
           <div className="bg-slate-900/90 px-4 py-2.5 border-b border-slate-800 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Code2 className="w-4 h-4 text-sky-400" />
@@ -115,20 +134,22 @@ export const CodeWorkbench: React.FC<CodeWorkbenchProps> = ({
                 className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 disabled:text-slate-500 text-white font-medium text-xs rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
               >
                 {isRunning ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Verifying...
-                  </>
+                  <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Verifying...</>
                 ) : (
-                  <>
-                    <Play className="w-3.5 h-3.5 fill-current" /> Run Verification Check
-                  </>
+                  <><Play className="w-3.5 h-3.5 fill-current" /> Run Verification Check</>
                 )}
               </button>
             </div>
           </div>
 
           {/* Monaco Lazy-Loaded Container */}
-          <div className="flex-1 min-h-[260px] relative" onPaste={handleEditorPaste}>
+          <div
+            className="flex-1 min-h-[260px] relative"
+            onPaste={handleEditorBlockedAction}
+            onCopy={handleEditorBlockedAction}
+            onCut={handleEditorBlockedAction}
+            onDrop={handleEditorBlockedAction}
+          >
             <Suspense
               fallback={
                 <div className="flex flex-col items-center justify-center h-full text-slate-400 text-xs gap-2">
@@ -143,6 +164,7 @@ export const CodeWorkbench: React.FC<CodeWorkbenchProps> = ({
                 theme="vs-dark"
                 value={code}
                 onChange={(val) => onCodeChange(val || '')}
+                onMount={handleEditorMount}
                 options={{
                   minimap: { enabled: false },
                   fontSize: 13,
@@ -150,6 +172,7 @@ export const CodeWorkbench: React.FC<CodeWorkbenchProps> = ({
                   scrollBeyondLastLine: false,
                   automaticLayout: true,
                   tabSize: 2,
+                  contextmenu: pasteAllowed,
                 }}
               />
             </Suspense>

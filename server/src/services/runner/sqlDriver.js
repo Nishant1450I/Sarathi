@@ -136,11 +136,43 @@ export class SqlDriver {
           kind: t.kind,
           passed: false,
           actual: '',
-          expected: t.expectedOutput,
+          expected: t.kind === 'visible' ? t.expectedOutput : undefined,
           error: validation.error,
+          executionTimeMs: 0,
         })),
         stdout: '',
         stderr: validation.error,
+        timeMs: Date.now() - startTime,
+        isolationNotice: 'In-memory ephemeral SQLite with hardened read-only statement enforcement.',
+      };
+    }
+
+    // Check for uncompleted starter code placeholders (e.g. `...`)
+    const cleanQuery = query
+      .replace(/\/\*[\s\S]*?\*\//g, ' ')
+      .replace(/--.*$/gm, ' ')
+      .trim()
+      .replace(/;+\s*$/, '');
+
+    if (cleanQuery.includes('...')) {
+      const err = 'Incomplete query: Starter code placeholder (...) was not completed.';
+      return {
+        status: 'failed',
+        passed: 0,
+        failed: tests.length,
+        total: tests.length,
+        timedOut: false,
+        results: tests.map(t => ({
+          id: t.id,
+          kind: t.kind,
+          passed: false,
+          actual: '',
+          expected: t.kind === 'visible' ? t.expectedOutput : undefined,
+          error: err,
+          executionTimeMs: 0,
+        })),
+        stdout: '',
+        stderr: err,
         timeMs: Date.now() - startTime,
         isolationNotice: 'In-memory ephemeral SQLite with hardened read-only statement enforcement.',
       };
@@ -151,67 +183,101 @@ export class SqlDriver {
     this.seedSandboxTables(memDb);
 
     try {
-      const results = [];
-      let totalStdout = '';
-      let totalStderr = '';
-
-      for (const t of tests) {
-        const testStart = Date.now();
-        try {
-          // If test has custom assertion or check query
-          const targetSql = t.input && !t.input.includes('require(') ? t.input : query;
-          
-          // Validate test target SQL as well if it's customized
-          if (targetSql !== query) {
-            const testValidation = validateSqlQuery(targetSql);
-            if (!testValidation.valid) {
-              throw new Error(testValidation.error);
-            }
-          }
-
-          const stmt = memDb.prepare(targetSql);
-          const rows = stmt.all();
-
-          // Cap rows to 1000 (V2.1 requirement)
-          const cappedRows = rows.slice(0, 1000);
-          let actualOutput = '';
-
-          if (cappedRows.length > 0) {
-            const firstRow = cappedRows[0];
-            const values = Object.values(firstRow);
-            if (values.length === 1 && typeof values[0] === 'number') {
-              actualOutput = String(values[0]);
-            } else {
-              actualOutput = values.join('|');
-            }
-          }
-
-          const trimmedActual = actualOutput.trim();
-          const trimmedExpected = (t.expectedOutput || '').trim();
-          const passed = trimmedActual === trimmedExpected || actualOutput.includes(trimmedExpected);
-
-          results.push({
-            id: t.id,
-            kind: t.kind,
-            passed,
-            actual: actualOutput,
-            expected: t.expectedOutput,
-            executionTimeMs: Date.now() - testStart,
-          });
-
-          totalStdout += `Row count: ${cappedRows.length}\n`;
-        } catch (err) {
-          results.push({
+      // 3. Execute the student's actual submission
+      let candidateRows = [];
+      try {
+        const stmt = memDb.prepare(cleanQuery);
+        candidateRows = stmt.all();
+      } catch (err) {
+        return {
+          status: 'failed',
+          passed: 0,
+          failed: tests.length,
+          total: tests.length,
+          timedOut: false,
+          results: tests.map(t => ({
             id: t.id,
             kind: t.kind,
             passed: false,
             actual: '',
-            expected: t.expectedOutput,
-            executionTimeMs: Date.now() - testStart,
-            error: err.message,
-          });
-          totalStderr += err.message + '\n';
+            expected: t.kind === 'visible' ? t.expectedOutput : undefined,
+            error: `SQL Execution Error: ${err.message}`,
+            executionTimeMs: 0,
+          })),
+          stdout: '',
+          stderr: `SQL Execution Error: ${err.message}`,
+          timeMs: Date.now() - startTime,
+          isolationNotice: 'In-memory ephemeral SQLite with hardened read-only statement enforcement.',
+        };
+      }
+
+      // Format tabular stdout from student's query result
+      let totalStdout = '';
+      if (candidateRows.length === 0) {
+        totalStdout = '(0 rows returned)';
+      } else {
+        const cappedRows = candidateRows.slice(0, 100);
+        const cols = Object.keys(cappedRows[0]);
+        const header = cols.join(' | ');
+        const divider = '-'.repeat(Math.max(header.length, 12));
+        const rowsText = cappedRows
+          .slice(0, 10)
+          .map(r => cols.map(c => String(r[c] ?? 'NULL')).join(' | '))
+          .join('\n');
+        totalStdout = `${header}\n${divider}\n${rowsText}\n(${candidateRows.length} row${candidateRows.length === 1 ? '' : 's'} returned)`;
+      }
+
+      // 4. Validate against test requirements
+      const results = [];
+      for (const t of tests) {
+        const testStart = Date.now();
+        let passed = false;
+        let actualStr = '';
+
+        if (candidateRows.length === 0) {
+          passed = false;
+          actualStr = '0 rows';
+        } else {
+          const exp = (t.expectedOutput || '').trim();
+          const firstRow = candidateRows[0];
+          const firstRowVals = Object.values(firstRow);
+          actualStr = firstRowVals.join('|');
+
+          if (t.kind === 'visible') {
+            // Visible test passes if query executed cleanly, returned rows, and satisfies row count or output pattern
+            if (!isNaN(Number(exp))) {
+              passed = candidateRows.length === Number(exp) || candidateRows.some(r => Object.values(r).some(v => Number(v) === Number(exp) || String(v) === exp));
+            } else {
+              passed = candidateRows.some(r => Object.values(r).some(v => String(v).includes(exp)));
+            }
+          } else {
+            // Hidden test: exact requirement assertion
+            if (exp.includes('|')) {
+              // Composite tuple match e.g. "101|1250"
+              passed = candidateRows.some(r => {
+                const rowStr = Object.values(r).map(v => typeof v === 'number' ? Math.round(v) : String(v)).join('|');
+                return rowStr === exp || rowStr.includes(exp);
+              });
+            } else if (!isNaN(Number(exp))) {
+              // Numeric match e.g. row count or metric
+              passed = candidateRows.length === Number(exp) || candidateRows.some(r => Object.values(r).some(v => Number(v) === Number(exp) || String(v) === exp));
+            } else {
+              // Specific identifier/value match e.g. "BERT-Base", "us-east-1", "198.51.100.45"
+              passed = candidateRows.some(r => Object.values(r).some(v => String(v).includes(exp)));
+            }
+          }
         }
+
+        results.push({
+          id: t.id,
+          kind: t.kind,
+          passed,
+          actual: actualStr,
+          // Never reveal expected outputs for hidden tests to client
+          expected: t.kind === 'visible' ? t.expectedOutput : undefined,
+          executionTimeMs: Date.now() - testStart,
+          error: passed ? null : (candidateRows.length === 0 ? 'Query returned 0 rows.' : 'Result does not satisfy assertion requirements.'),
+        });
       }
 
       const passedCount = results.filter(r => r.passed).length;
@@ -222,10 +288,10 @@ export class SqlDriver {
         total: tests.length,
         timedOut: false,
         results,
-        stdout: totalStdout.trim(),
-        stderr: totalStderr.trim(),
+        stdout: totalStdout,
+        stderr: '',
         timeMs: Date.now() - startTime,
-        isolationNotice: 'In-memory ephemeral SQLite sandbox with read-only validation.',
+        isolationNotice: 'In-memory ephemeral SQLite with hardened read-only statement enforcement.',
       };
     } finally {
       try {

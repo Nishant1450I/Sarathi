@@ -7,7 +7,7 @@
 //  - Timestamps are ISO-8601 UTC.
 //  - Multi-tenant RBAC and candidate privacy boundaries are enforced at the schema and service level.
 
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 8;
 
 export const ddl = `
 -- ============ ORGANISATIONS ============
@@ -22,20 +22,64 @@ CREATE TABLE IF NOT EXISTS organisations (
   updated_at TEXT NOT NULL
 );
 
+-- ============ INSTITUTIONS ============
+CREATE TABLE IF NOT EXISTS institutions (
+  id         TEXT PRIMARY KEY,
+  name       TEXT NOT NULL,
+  domain     TEXT,
+  settings   TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 -- ============ USERS ============
 CREATE TABLE IF NOT EXISTS users (
-  id            TEXT PRIMARY KEY,
-  email         TEXT NOT NULL UNIQUE,
-  password_hash TEXT,
-  full_name     TEXT NOT NULL,
-  role          TEXT NOT NULL DEFAULT 'candidate',
-  company_name  TEXT,
-  institution   TEXT,
-  timezone      TEXT NOT NULL DEFAULT 'Asia/Kolkata',
-  avatar_url    TEXT,
-  created_at    TEXT NOT NULL,
-  updated_at    TEXT NOT NULL,
-  deleted_at    TEXT
+  id             TEXT PRIMARY KEY,
+  email          TEXT NOT NULL UNIQUE,
+  password_hash  TEXT,
+  full_name      TEXT NOT NULL,
+  role           TEXT NOT NULL DEFAULT 'candidate',
+  status         TEXT NOT NULL DEFAULT 'active',
+  company_name   TEXT,
+  institution    TEXT,
+  institution_id TEXT REFERENCES institutions(id),
+  timezone       TEXT NOT NULL DEFAULT 'Asia/Kolkata',
+  avatar_url     TEXT,
+  created_at     TEXT NOT NULL,
+  updated_at     TEXT NOT NULL,
+  deleted_at     TEXT
+);
+
+-- ============ AUTH IDENTITIES (GOOGLE SSO / OAUTH) ============
+CREATE TABLE IF NOT EXISTS auth_identities (
+  id               TEXT PRIMARY KEY,
+  user_id          TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  provider         TEXT NOT NULL,
+  provider_subject TEXT NOT NULL,
+  email_at_link    TEXT NOT NULL,
+  created_at       TEXT NOT NULL,
+  last_login_at    TEXT NOT NULL,
+  UNIQUE(provider, provider_subject)
+);
+
+-- ============ ACCOUNT INVITATIONS ============
+CREATE TABLE IF NOT EXISTS account_invitations (
+  id             TEXT PRIMARY KEY,
+  email          TEXT NOT NULL,
+  role           TEXT NOT NULL,
+  org_id         TEXT REFERENCES organisations(id) ON DELETE CASCADE,
+  institution_id TEXT REFERENCES institutions(id) ON DELETE CASCADE,
+  invited_by     TEXT REFERENCES users(id),
+  status         TEXT NOT NULL DEFAULT 'pending',
+  expires_at     TEXT NOT NULL,
+  created_at     TEXT NOT NULL
+);
+
+-- ============ AUTH NONCES (SINGLE-USE CSRF / REPLAY PROTECTION) ============
+CREATE TABLE IF NOT EXISTS auth_nonces (
+  nonce      TEXT PRIMARY KEY,
+  expires_at INTEGER NOT NULL,
+  used_at    INTEGER
 );
 
 -- ============ ORGANISATION MEMBERSHIPS ============
@@ -405,6 +449,7 @@ CREATE TABLE IF NOT EXISTS student_roadmaps (
   user_id            TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   track_key          TEXT NOT NULL,
   completed_task_ids TEXT NOT NULL DEFAULT '[]',
+  task_progress      TEXT NOT NULL DEFAULT '{}',
   updated_at         TEXT NOT NULL,
   UNIQUE(user_id, track_key)
 );
@@ -624,7 +669,67 @@ CREATE TABLE IF NOT EXISTS integrity_reviews (
   created_at  TEXT NOT NULL
 );
 
+-- ============ SKILL INTELLIGENCE ENGINE ============
+CREATE TABLE IF NOT EXISTS canonical_skill_profiles (
+  candidate_id              TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  skill_id                  TEXT NOT NULL REFERENCES skills(id) ON DELETE CASCADE,
+  demonstrated_proficiency  INTEGER,
+  evidence_status           TEXT NOT NULL DEFAULT 'INSUFFICIENT_EVIDENCE' CHECK(evidence_status IN ('VERIFIED', 'PROVISIONAL', 'INSUFFICIENT_EVIDENCE', 'CONFLICTING', 'OUTDATED')),
+  confidence                TEXT NOT NULL DEFAULT 'NONE' CHECK(confidence IN ('HIGH', 'MEDIUM', 'LOW', 'NONE')),
+  evidence_count            INTEGER NOT NULL DEFAULT 0,
+  last_evidence_at          TEXT,
+  scoring_rule_version      TEXT NOT NULL DEFAULT '1.0',
+  reassessment_recommended  INTEGER NOT NULL DEFAULT 0,
+  updated_at                TEXT NOT NULL,
+  PRIMARY KEY (candidate_id, skill_id)
+);
+
+CREATE TABLE IF NOT EXISTS skill_evidence_ledger (
+  id                  TEXT PRIMARY KEY,
+  candidate_id        TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  skill_id            TEXT NOT NULL REFERENCES skills(id) ON DELETE CASCADE,
+  evidence_type       TEXT NOT NULL,
+  source              TEXT NOT NULL,
+  title               TEXT NOT NULL,
+  reference_url       TEXT,
+  score               REAL,
+  max_score           REAL,
+  demonstrated_level  INTEGER,
+  validity_status     TEXT NOT NULL DEFAULT 'VALID',
+  rule_version        TEXT NOT NULL DEFAULT '1.0',
+  metadata            TEXT NOT NULL DEFAULT '{}',
+  created_at          TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS practical_challenges (
+  id               TEXT PRIMARY KEY,
+  domain_id        TEXT NOT NULL,
+  skill_id         TEXT NOT NULL,
+  title            TEXT NOT NULL,
+  description      TEXT NOT NULL,
+  challenge_type   TEXT NOT NULL DEFAULT 'api_debugging',
+  starter_code     TEXT NOT NULL,
+  test_suite_json  TEXT NOT NULL DEFAULT '[]',
+  difficulty       INTEGER NOT NULL DEFAULT 2,
+  active           INTEGER NOT NULL DEFAULT 1,
+  created_at       TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS practical_challenge_submissions (
+  id                 TEXT PRIMARY KEY,
+  challenge_id       TEXT NOT NULL REFERENCES practical_challenges(id) ON DELETE CASCADE,
+  candidate_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  submitted_code     TEXT NOT NULL,
+  status             TEXT NOT NULL CHECK(status IN ('passed', 'failed')),
+  score              REAL NOT NULL,
+  test_results_json  TEXT NOT NULL DEFAULT '{}',
+  submitted_at       TEXT NOT NULL
+);
+
 -- ============ INDEXES ============
+CREATE INDEX IF NOT EXISTS idx_canonical_skill_profiles_user ON canonical_skill_profiles(candidate_id);
+CREATE INDEX IF NOT EXISTS idx_skill_evidence_ledger_user ON skill_evidence_ledger(candidate_id, skill_id);
+CREATE INDEX IF NOT EXISTS idx_practical_challenges_skill ON practical_challenges(skill_id);
 CREATE INDEX IF NOT EXISTS idx_memberships_user ON organisation_memberships(user_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_org_status ON jobs(org_id, status);
 CREATE INDEX IF NOT EXISTS idx_job_skills_job ON job_skill_requirements(job_id);
@@ -647,5 +752,9 @@ CREATE INDEX IF NOT EXISTS idx_integrity_events_session ON integrity_events(sess
 CREATE INDEX IF NOT EXISTS idx_integrity_reviews_session ON integrity_reviews(session_id);
 CREATE INDEX IF NOT EXISTS idx_assessment_questions_domain ON assessment_questions(domain_id, skill_id);
 CREATE INDEX IF NOT EXISTS idx_student_resumes_user ON student_resumes(user_id);
+CREATE INDEX IF NOT EXISTS idx_auth_identities_user ON auth_identities(user_id);
+CREATE INDEX IF NOT EXISTS idx_auth_identities_provider_sub ON auth_identities(provider, provider_subject);
+CREATE INDEX IF NOT EXISTS idx_invitations_email ON account_invitations(email);
+CREATE INDEX IF NOT EXISTS idx_auth_nonces_exp ON auth_nonces(expires_at);
 
 `;

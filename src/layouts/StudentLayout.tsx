@@ -34,7 +34,7 @@ export const StudentLayout: React.FC = () => {
   }
 
   if (!user) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to={`/login?returnTo=${encodeURIComponent(location.pathname + location.search)}`} replace />;
   }
 
   // Enforce role authorization: users without student authorization are redirected to their portal

@@ -24,6 +24,7 @@ import notificationRoutes from './routes/notificationRoutes.js';
 import feedbackRoutes from './routes/feedbackRoutes.js';
 import passportShareRoutes from './routes/passportShareRoutes.js';
 import resumeRoutes from './routes/resumeRoutes.js';
+import skillEngineRoutes from './routes/skillEngineRoutes.js';
 
 // Validate configuration on startup
 validateConfig();
@@ -96,6 +97,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api/passport', passportShareRoutes);
 app.use('/api/resumes', resumeRoutes);
+app.use('/api/skills', skillEngineRoutes);
 
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
@@ -108,8 +110,17 @@ const isDirectRun = Boolean(process.argv[1] && resolve(process.argv[1]) === file
 const isTest = Boolean(process.env.NODE_TEST_CONTEXT || process.env.NODE_ENV === 'test' || process.argv.some(a => a.includes('--test')));
 
 if (isDirectRun || !isTest) {
-  server = app.listen(appConfig.port, appConfig.host, () => {
+  server = app.listen(appConfig.port, appConfig.host, async () => {
     console.log(`SARATHI Recruiter API listening at http://${appConfig.host}:${appConfig.port}`);
+    try {
+      const { detectPythonExecutable } = await import('./services/runner/pythonDriver.js');
+      const pyPath = await detectPythonExecutable();
+      if (pyPath) {
+        console.log(`[Assessment Runner] Python 3 runtime detected: ${pyPath}`);
+      } else {
+        console.warn(`[Assessment Runner] Python 3 runtime NOT detected on server.`);
+      }
+    } catch {}
   });
 }
 
