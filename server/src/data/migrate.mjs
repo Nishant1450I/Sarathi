@@ -73,6 +73,33 @@ export function runMigrations(dbFile) {
     if (resourcesCheck) {
       const cols = db.prepare("PRAGMA table_info(learning_resources);").all();
       const colNames = new Set(cols.map(c => c.name));
+      if (!colNames.has('slug')) {
+        db.exec("ALTER TABLE learning_resources ADD COLUMN slug TEXT;");
+      }
+      if (!colNames.has('resource_type')) {
+        db.exec("ALTER TABLE learning_resources ADD COLUMN resource_type TEXT DEFAULT 'documentation';");
+      }
+      if (!colNames.has('source')) {
+        db.exec("ALTER TABLE learning_resources ADD COLUMN source TEXT DEFAULT 'web';");
+      }
+      if (!colNames.has('youtube_video_id')) {
+        db.exec("ALTER TABLE learning_resources ADD COLUMN youtube_video_id TEXT;");
+      }
+      if (!colNames.has('youtube_playlist_id')) {
+        db.exec("ALTER TABLE learning_resources ADD COLUMN youtube_playlist_id TEXT;");
+      }
+      if (!colNames.has('channel_name')) {
+        db.exec("ALTER TABLE learning_resources ADD COLUMN channel_name TEXT;");
+      }
+      if (!colNames.has('thumbnail_url')) {
+        db.exec("ALTER TABLE learning_resources ADD COLUMN thumbnail_url TEXT;");
+      }
+      if (!colNames.has('duration_minutes')) {
+        db.exec("ALTER TABLE learning_resources ADD COLUMN duration_minutes INTEGER DEFAULT 0;");
+      }
+      if (!colNames.has('last_verified_at')) {
+        db.exec("ALTER TABLE learning_resources ADD COLUMN last_verified_at TEXT;");
+      }
       if (!colNames.has('description')) {
         db.exec("ALTER TABLE learning_resources ADD COLUMN description TEXT DEFAULT '';");
       }
@@ -81,6 +108,15 @@ export function runMigrations(dbFile) {
       }
       if (!colNames.has('prerequisites')) {
         db.exec("ALTER TABLE learning_resources ADD COLUMN prerequisites TEXT DEFAULT '[]';");
+      }
+
+      // Backfill slug and resource_type for pre-existing rows
+      try {
+        db.exec("UPDATE learning_resources SET slug = id WHERE slug IS NULL OR slug = '';");
+        db.exec("UPDATE learning_resources SET resource_type = COALESCE(type, 'documentation') WHERE resource_type IS NULL OR resource_type = '';");
+        db.exec("UPDATE learning_resources SET source = CASE WHEN youtube_video_id IS NOT NULL OR youtube_playlist_id IS NOT NULL THEN 'youtube' ELSE 'web' END WHERE source IS NULL OR source = '';");
+      } catch (backfillErr) {
+        console.warn('Backfill note for learning_resources:', backfillErr.message);
       }
     }
 
@@ -102,6 +138,12 @@ export function runMigrations(dbFile) {
       }
       if (!colNames.has('notes')) {
         db.exec("ALTER TABLE resource_progress ADD COLUMN notes TEXT DEFAULT '';");
+      }
+      if (!colNames.has('last_position_seconds')) {
+        db.exec("ALTER TABLE resource_progress ADD COLUMN last_position_seconds INTEGER DEFAULT 0;");
+      }
+      if (!colNames.has('completed_item_ids')) {
+        db.exec("ALTER TABLE resource_progress ADD COLUMN completed_item_ids TEXT DEFAULT '[]';");
       }
       if (!colNames.has('completed_at')) {
         db.exec("ALTER TABLE resource_progress ADD COLUMN completed_at TEXT;");

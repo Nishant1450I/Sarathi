@@ -3,6 +3,7 @@ import { randomUUID as uuidv4 } from 'node:crypto';
 import { initDb, closeDb } from '../config/db.js';
 import { runMigrations } from '../data/migrate.mjs';
 import { seedAssessmentBank } from '../data/seeds/assessmentSeeder.js';
+import { seedLearningResources } from '../data/seeds/resourceSeeder.js';
 
 export async function runSeeder(dbFile) {
   runMigrations(dbFile);
@@ -839,6 +840,9 @@ export async function runSeeder(dbFile) {
 
   // 13. V2 ASSESSMENT QUESTION BANK
   seedAssessmentBank(db);
+
+  // 14. EXPANDED LEARNING RESOURCES (Phase 2 Catalog)
+  seedLearningResources();
 
   console.log('Seeding completed successfully! 20 domains, realistic candidates, jobs, evidence, and audit logs are live.');
 }

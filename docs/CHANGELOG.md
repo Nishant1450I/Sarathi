@@ -345,4 +345,75 @@
   - Code hygiene: `npm run lint` clean (0 errors), `npm run check:lines` passed (all 13 files < 200 lines).
   - Production build: `npm run build` completes cleanly in 867ms.
 
+## Learning Library Expansion (Completed)
+
+### Phase 1: Schema, Migrations & Seed Foundation
+- **Database Schema Version 9:**
+  - Bumped `SCHEMA_VERSION` to 9 in `server/src/data/schema.js`.
+  - Extended `learning_resources` with: `slug` (unique), `resource_type`, `source`, `youtube_video_id`, `youtube_playlist_id`, `channel_name`, `thumbnail_url`, `duration_minutes`, `last_verified_at`.
+  - Created `resource_playlist_items` table with `id`, `resource_id`, `position`, `video_id`, `title`, `duration_minutes`, `created_at`.
+  - Extended `resource_progress` with `last_position_seconds` (INT) and `completed_item_ids` (JSON).
+  - Created indexes `idx_learning_resources_slug` and `idx_playlist_items_resource`.
+- **Safe Migration & Backfills:**
+  - Idempotent migration step 9 in `server/src/data/migrate.mjs` ensuring existing rows, user bookmarks, and progress remain completely intact.
+- **Automated Resource Validator:**
+  - Added `scripts/validate-resources.mjs` (`npm run validate:resources`).
+  - Verifies required metadata, uniqueness of slugs, domain/type validity, and live network reachability (YouTube oEmbed for video IDs, HTTP for web links, `--skip-network` support).
+
+### Phase 2: Curated 80+ Resource Catalog
+- **Catalog Population (`server/src/data/seeds/resourceCatalog.js`):**
+  - 81 verified resources across all 5 technical domains:
+    - Frontend & Web (`dom-frontend`): 19 resources
+    - Backend & System Design (`dom-backend`): 16 resources
+    - AI & Machine Learning (`dom-aiml`): 17 resources
+    - Cloud & DevOps (`dom-clouddevops`): 14 resources
+    - Cybersecurity (`dom-cybersecurity`): 15 resources
+  - Format distribution: 42 Videos, 5 Playlists, 20 Documentation guides, 9 Interactive labs, 5 Handbooks.
+  - Video/playlist count: 47 (exceeds requirement of >= 36).
+  - 100% free with no invented URLs or IDs; excluded/rejected candidates documented in `docs/RESOURCES_TO_VERIFY.md`.
+
+### Phase 3: Video Player Modal & YouTube IFrame API
+- **Official YouTube IFrame Embed (`src/components/resources/YouTubeIframe.tsx`):**
+  - Uses `https://www.youtube-nocookie.com` host and official `iframe_api`.
+  - Dynamic script loading with graceful fallback for network/ad-blocker restrictions.
+  - Full event tracking: `onPlay` (sets status to `in_progress`), `onPause` (saves last position), `onNearEnd` (90% watched triggers completion), and `onEnded`.
+- **Playlist Navigation Drawer (`src/components/resources/PlaylistDrawer.tsx`):**
+  - Shows course chapters, completion checkmarks, duration, active video highlight, and click-to-play.
+- **Video Player Modal (`src/components/resources/VideoPlayerModal.tsx`):**
+  - Seamless in-app playback, progress badge, manual completion button, and "Open on YouTube" external fallback.
+- **Helmet Security Headers:**
+  - Configured CSP in `server/src/index.js` for production (`frame-src` for `youtube.com` and `youtube-nocookie.com`, `img-src` for `i.ytimg.com`, `script-src` for `youtube.com/iframe_api`).
+
+### Phase 4: Server-Side Filtering, Sorting & Pagination
+- **Server API (`server/src/routes/resourceRoutes.js` & `server/src/services/resourceService.js`):**
+  - Supports query parameters: `format` / `type`, `domain`, `level`, `free`, `q` / `search`, `sort` (`recommended`, `newest`, `shortest`, `longest`), `page` (default 1), `pageSize` (12 per page).
+  - Parameterized SQL with `LIMIT ? OFFSET ?` and total count metadata.
+- **Frontend Filter Bar & Grid (`src/components/resources/ResourceFilters.tsx` & `ResourceCard.tsx`):**
+  - Format filter tabs, domain/level dropdowns, duration sort controls, and search input.
+  - Responsive cards with video thumbnail, channel name, play icon overlay, duration badge, and progress bar.
+  - "Load More" pagination support.
+
+### Phase 5: Gap-Based Recommendations & Stat Cards
+- **Personalized Recommendations:**
+  - `GET /api/resources/recommendations` and alias `GET /api/resources/recommended`.
+  - Calculates overlap between resource `skill_tags` and student's unverified/assessed skill gaps from `candidate_skills` and target role.
+  - Returns customized reason strings (e.g. "Targeted to elevate your proficiency in React").
+  - Graceful fallback for unassessed students.
+- **Live Counters (`src/components/resources/ResourceStats.tsx`):**
+  - Stat cards for In Progress, Completed, and Saved items that update instantly with optimistic UI.
+
+### Phase 6: Test Suites & Verification
+- **Backend Integration Suite (`server/src/test/integration/resources_v2.test.mjs`):**
+  - 7 comprehensive tests covering catalog size, pagination, filtering, sorting, progress saving, per-user isolation, and seed idempotency.
+- **Client Vitest Suite (`src/test/resourcesPage.test.tsx`):**
+  - 5 tests covering component rendering, format switching, video modal playback, and progress update API dispatch.
+- **Verification Results:**
+  - Server test suite: **223/223 passed (33 suites, 0 failures)**
+  - Client test suite: **96/96 passed (17 suites, 0 failures)**
+  - Seed validation: `npm run validate:seeds` passed.
+  - Resource validation: `npm run validate:resources` passed (81 resources live-verified).
+  - Production build: `npm run build` completed in 1.65s.
+  - Line limits: All components in `src/components/resources` and `src/pages/student/ResourcesPage.tsx` strictly under 300 lines.
+
+
 

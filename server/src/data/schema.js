@@ -7,7 +7,7 @@
 //  - Timestamps are ISO-8601 UTC.
 //  - Multi-tenant RBAC and candidate privacy boundaries are enforced at the schema and service level.
 
-export const SCHEMA_VERSION = 8;
+export const SCHEMA_VERSION = 9;
 
 export const ddl = `
 -- ============ ORGANISATIONS ============
@@ -484,20 +484,40 @@ CREATE TABLE IF NOT EXISTS passport_shares (
 -- ============ LEARNING RESOURCES ============
 CREATE TABLE IF NOT EXISTS learning_resources (
   id                  TEXT PRIMARY KEY,
+  slug                TEXT NOT NULL UNIQUE,
   domain              TEXT NOT NULL,
   skill_tags          TEXT NOT NULL DEFAULT '[]',
   title               TEXT NOT NULL,
   provider            TEXT NOT NULL,
-  type                TEXT NOT NULL DEFAULT 'course',
+  type                TEXT NOT NULL DEFAULT 'documentation',
+  resource_type       TEXT NOT NULL DEFAULT 'documentation',
+  source              TEXT NOT NULL DEFAULT 'web',
   url                 TEXT NOT NULL,
   is_free             INTEGER NOT NULL DEFAULT 1,
   level               TEXT NOT NULL DEFAULT 'Beginner',
   duration            TEXT NOT NULL DEFAULT '',
+  duration_minutes    INTEGER DEFAULT 0,
   language            TEXT NOT NULL DEFAULT 'English',
   description         TEXT NOT NULL DEFAULT '',
   learning_objectives TEXT NOT NULL DEFAULT '[]',
   prerequisites       TEXT NOT NULL DEFAULT '[]',
+  youtube_video_id    TEXT,
+  youtube_playlist_id TEXT,
+  channel_name        TEXT,
+  thumbnail_url       TEXT,
+  last_verified_at    TEXT,
   created_at          TEXT NOT NULL
+);
+
+-- ============ RESOURCE PLAYLIST ITEMS ============
+CREATE TABLE IF NOT EXISTS resource_playlist_items (
+  id               TEXT PRIMARY KEY,
+  resource_id      TEXT NOT NULL REFERENCES learning_resources(id) ON DELETE CASCADE,
+  position         INTEGER NOT NULL,
+  video_id         TEXT NOT NULL,
+  title            TEXT NOT NULL,
+  duration_minutes INTEGER DEFAULT 0,
+  created_at       TEXT NOT NULL
 );
 
 -- ============ RESOURCE BOOKMARKS ============
@@ -511,13 +531,15 @@ CREATE TABLE IF NOT EXISTS resource_bookmarks (
 
 -- ============ RESOURCE PROGRESS ============
 CREATE TABLE IF NOT EXISTS resource_progress (
-  user_id          TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  resource_id      TEXT NOT NULL REFERENCES learning_resources(id) ON DELETE CASCADE,
-  status           TEXT NOT NULL DEFAULT 'not_started',
-  percent_complete INTEGER NOT NULL DEFAULT 0,
-  notes            TEXT NOT NULL DEFAULT '',
-  completed_at     TEXT,
-  updated_at       TEXT NOT NULL,
+  user_id               TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  resource_id           TEXT NOT NULL REFERENCES learning_resources(id) ON DELETE CASCADE,
+  status                TEXT NOT NULL DEFAULT 'not_started',
+  percent_complete      INTEGER NOT NULL DEFAULT 0,
+  notes                 TEXT NOT NULL DEFAULT '',
+  last_position_seconds INTEGER NOT NULL DEFAULT 0,
+  completed_item_ids    TEXT NOT NULL DEFAULT '[]',
+  completed_at          TEXT,
+  updated_at            TEXT NOT NULL,
   PRIMARY KEY (user_id, resource_id)
 );
 
@@ -745,6 +767,8 @@ CREATE INDEX IF NOT EXISTS idx_password_resets_user ON password_resets(user_id);
 CREATE INDEX IF NOT EXISTS idx_password_resets_token ON password_resets(token_hash);
 CREATE INDEX IF NOT EXISTS idx_passport_shares_pub ON passport_shares(public_id);
 CREATE INDEX IF NOT EXISTS idx_learning_resources_domain ON learning_resources(domain);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_learning_resources_slug ON learning_resources(slug);
+CREATE INDEX IF NOT EXISTS idx_playlist_items_resource ON resource_playlist_items(resource_id, position);
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, is_read);
 CREATE INDEX IF NOT EXISTS idx_assessment_sessions_user ON assessment_sessions(user_id, status);
 CREATE INDEX IF NOT EXISTS idx_assessment_sessions_domain ON assessment_sessions(domain_id);

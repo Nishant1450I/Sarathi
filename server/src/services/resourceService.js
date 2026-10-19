@@ -10,78 +10,128 @@ export const resourceService = {
   listResources({
     domain = null,
     skill = null,
+    type = null,
+    format = null,
     isFree = null,
     level = null,
     status = null,
     collection = null,
     search = '',
+    sort = 'recommended',
+    page = 1,
+    pageSize = 12,
+    paginate = false,
     bookmarkedOnly = false,
     userId = null
   } = {}) {
     this.ensureSeeded();
 
-    let sql = `
+    let whereClause = ' WHERE 1=1';
+    const params = [userId || 'anonymous', userId || 'anonymous'];
+
+    if (domain && domain !== 'all') {
+      whereClause += ' AND lr.domain = ?';
+      params.push(domain);
+    }
+
+    if (level && level !== 'all') {
+      whereClause += ' AND LOWER(lr.level) = LOWER(?)';
+      params.push(level);
+    }
+
+    const effectiveFormat = format || type;
+    if (effectiveFormat && effectiveFormat !== 'all') {
+      whereClause += ' AND (lr.resource_type = ? OR lr.type = ?)';
+      params.push(effectiveFormat, effectiveFormat);
+    }
+
+    if (isFree !== null && isFree !== undefined && isFree !== 'all') {
+      whereClause += ' AND lr.is_free = ?';
+      params.push(isFree === 'true' || isFree === true || isFree === 1 ? 1 : 0);
+    }
+
+    if (status && status !== 'all') {
+      whereClause += ' AND COALESCE(rp.status, \'not_started\') = ?';
+      params.push(status);
+    }
+
+    if (collection && collection !== 'all') {
+      whereClause += ' AND rb.user_id IS NOT NULL AND rb.collection_name = ?';
+      params.push(collection);
+    }
+
+    if (skill && skill.trim()) {
+      const s = `%${skill.trim().toLowerCase()}%`;
+      whereClause += ' AND LOWER(lr.skill_tags) LIKE ?';
+      params.push(s);
+    }
+
+    if (search && search.trim()) {
+      const q = `%${search.trim().toLowerCase()}%`;
+      whereClause += ' AND (LOWER(lr.title) LIKE ? OR LOWER(lr.provider) LIKE ? OR LOWER(COALESCE(lr.channel_name, \'\')) LIKE ? OR LOWER(lr.skill_tags) LIKE ? OR LOWER(lr.description) LIKE ?)';
+      params.push(q, q, q, q, q);
+    }
+
+    if (bookmarkedOnly) {
+      whereClause += ' AND rb.user_id IS NOT NULL';
+    }
+
+    // Determine sorting
+    let orderClause = ' ORDER BY lr.created_at ASC;';
+    if (sort === 'newest') {
+      orderClause = ' ORDER BY lr.created_at DESC, lr.id ASC;';
+    } else if (sort === 'shortest') {
+      orderClause = ' ORDER BY lr.duration_minutes ASC, lr.created_at ASC;';
+    } else if (sort === 'longest') {
+      orderClause = ' ORDER BY lr.duration_minutes DESC, lr.created_at DESC;';
+    } else if (sort === 'recommended') {
+      orderClause = ' ORDER BY lr.created_at ASC;';
+    }
+
+    const baseFromClause = `
+      FROM learning_resources lr
+      LEFT JOIN resource_bookmarks rb ON rb.resource_id = lr.id AND rb.user_id = ?
+      LEFT JOIN resource_progress rp ON rp.resource_id = lr.id AND rp.user_id = ?
+    `;
+
+    // If pagination is requested, get total count first
+    let totalCount = 0;
+    if (paginate) {
+      const countSql = `SELECT COUNT(*) as total ${baseFromClause} ${whereClause};`;
+      const countRow = repository.queryOne(countSql, params);
+      totalCount = countRow ? Number(countRow.total) : 0;
+    }
+
+    let querySql = `
       SELECT lr.*,
              CASE WHEN rb.user_id IS NOT NULL THEN 1 ELSE 0 END as is_bookmarked,
              COALESCE(rb.collection_name, 'my_list') as collection_name,
              COALESCE(rp.status, 'not_started') as progress_status,
              COALESCE(rp.percent_complete, 0) as percent_complete,
              COALESCE(rp.notes, '') as progress_notes,
+             COALESCE(rp.last_position_seconds, 0) as last_position_seconds,
+             COALESCE(rp.completed_item_ids, '[]') as completed_item_ids,
              rp.completed_at as progress_completed_at,
              rp.updated_at as progress_updated_at
-      FROM learning_resources lr
-      LEFT JOIN resource_bookmarks rb ON rb.resource_id = lr.id AND rb.user_id = ?
-      LEFT JOIN resource_progress rp ON rp.resource_id = lr.id AND rp.user_id = ?
-      WHERE 1=1
+      ${baseFromClause}
+      ${whereClause}
+      ${orderClause.replace(';', '')}
     `;
-    const params = [userId || 'anonymous', userId || 'anonymous'];
 
-    if (domain && domain !== 'all') {
-      sql += ' AND lr.domain = ?';
-      params.push(domain);
+    const queryParams = [...params];
+    if (paginate) {
+      const safePage = Math.max(1, parseInt(page, 10) || 1);
+      const safePageSize = Math.max(1, parseInt(pageSize, 10) || 12);
+      const offset = (safePage - 1) * safePageSize;
+      querySql += ' LIMIT ? OFFSET ?;';
+      queryParams.push(safePageSize, offset);
+    } else {
+      querySql += ';';
     }
 
-    if (level && level !== 'all') {
-      sql += ' AND LOWER(lr.level) = LOWER(?)';
-      params.push(level);
-    }
+    const rows = repository.query(querySql, queryParams);
 
-    if (isFree !== null && isFree !== undefined && isFree !== 'all') {
-      sql += ' AND lr.is_free = ?';
-      params.push(isFree === 'true' || isFree === true || isFree === 1 ? 1 : 0);
-    }
-
-    if (status && status !== 'all') {
-      sql += ' AND COALESCE(rp.status, \'not_started\') = ?';
-      params.push(status);
-    }
-
-    if (collection && collection !== 'all') {
-      sql += ' AND rb.user_id IS NOT NULL AND rb.collection_name = ?';
-      params.push(collection);
-    }
-
-    if (skill && skill.trim()) {
-      const s = `%${skill.trim().toLowerCase()}%`;
-      sql += ' AND LOWER(lr.skill_tags) LIKE ?';
-      params.push(s);
-    }
-
-    if (search && search.trim()) {
-      const q = `%${search.trim().toLowerCase()}%`;
-      sql += ' AND (LOWER(lr.title) LIKE ? OR LOWER(lr.provider) LIKE ? OR LOWER(lr.skill_tags) LIKE ? OR LOWER(lr.description) LIKE ?)';
-      params.push(q, q, q, q);
-    }
-
-    if (bookmarkedOnly) {
-      sql += ' AND rb.user_id IS NOT NULL';
-    }
-
-    sql += ' ORDER BY lr.created_at ASC;';
-
-    const rows = repository.query(sql, params);
-
-    return rows.map((r) => {
+    const items = rows.map((r) => {
       let skillTags = [];
       try {
         skillTags = JSON.parse(r.skill_tags || '[]');
@@ -103,30 +153,77 @@ export const resourceService = {
         prerequisites = [];
       }
 
+      let completedItemIds = [];
+      try {
+        completedItemIds = JSON.parse(r.completed_item_ids || '[]');
+      } catch {
+        completedItemIds = [];
+      }
+
       return {
         id: r.id,
+        slug: r.slug || r.id,
         domain: r.domain,
         skillTags,
         title: r.title,
         provider: r.provider,
-        type: r.type,
+        type: r.type || r.resource_type || 'documentation',
+        resourceType: r.resource_type || r.type || 'documentation',
+        source: r.source || (r.youtube_video_id || r.youtube_playlist_id ? 'youtube' : 'web'),
         url: r.url,
         isFree: Boolean(r.is_free),
         level: r.level,
         duration: r.duration,
-        language: r.language,
+        durationMinutes: Number(r.duration_minutes) || 0,
+        language: r.language || 'English',
         description: r.description || '',
         learningObjectives,
         prerequisites,
+        youtubeVideoId: r.youtube_video_id || null,
+        youtubePlaylistId: r.youtube_playlist_id || null,
+        channelName: r.channel_name || null,
+        thumbnailUrl: r.thumbnail_url || null,
+        lastVerifiedAt: r.last_verified_at || null,
         isBookmarked: Boolean(r.is_bookmarked),
         collectionName: r.collection_name,
         progressStatus: r.progress_status,
         percentComplete: Number(r.percent_complete) || 0,
+        lastPositionSeconds: Number(r.last_position_seconds) || 0,
+        completedItemIds,
         progressNotes: r.progress_notes || '',
         completedAt: r.progress_completed_at,
         progressUpdatedAt: r.progress_updated_at,
       };
     });
+
+    if (paginate) {
+      const safePage = Math.max(1, parseInt(page, 10) || 1);
+      const safePageSize = Math.max(1, parseInt(pageSize, 10) || 12);
+      return {
+        items,
+        totalCount,
+        page: safePage,
+        pageSize: safePageSize,
+        totalPages: Math.ceil(totalCount / safePageSize) || 1,
+      };
+    }
+
+    return items;
+  },
+
+  getPlaylistItems(resourceId) {
+    this.ensureSeeded();
+    const rows = repository.query(
+      'SELECT * FROM resource_playlist_items WHERE resource_id = ? ORDER BY position ASC;',
+      [resourceId]
+    );
+    return rows.map(r => ({
+      id: r.id,
+      position: r.position,
+      videoId: r.video_id,
+      title: r.title,
+      durationMinutes: r.duration_minutes || 0,
+    }));
   },
 
   toggleBookmark(userId, resourceId, collectionName = 'my_list') {
@@ -153,7 +250,13 @@ export const resourceService = {
     }
   },
 
-  updateProgress(userId, resourceId, { status = 'in_progress', percentComplete = null, notes = null } = {}) {
+  updateProgress(userId, resourceId, {
+    status = 'in_progress',
+    percentComplete = null,
+    lastPositionSeconds = null,
+    completedItemIds = null,
+    notes = null
+  } = {}) {
     this.ensureSeeded();
     const validStatuses = ['not_started', 'in_progress', 'completed'];
     const safeStatus = validStatuses.includes(status) ? status : 'in_progress';
@@ -168,17 +271,40 @@ export const resourceService = {
     effPercent = Math.max(0, Math.min(100, Math.round(Number(effPercent) || 0)));
 
     const completedAt = safeStatus === 'completed' ? now : null;
+    const safePosition = lastPositionSeconds !== null && lastPositionSeconds !== undefined
+      ? Math.max(0, Math.round(Number(lastPositionSeconds) || 0))
+      : null;
+    const safeCompletedJson = Array.isArray(completedItemIds)
+      ? JSON.stringify(completedItemIds)
+      : null;
 
     repository.execute(
-      `INSERT INTO resource_progress (user_id, resource_id, status, percent_complete, notes, completed_at, updated_at)
-       VALUES (?, ?, ?, ?, COALESCE(?, ''), ?, ?)
+      `INSERT INTO resource_progress (
+         user_id, resource_id, status, percent_complete, notes,
+         last_position_seconds, completed_item_ids, completed_at, updated_at
+       )
+       VALUES (?, ?, ?, ?, COALESCE(?, ''), COALESCE(?, 0), COALESCE(?, '[]'), ?, ?)
        ON CONFLICT(user_id, resource_id) DO UPDATE SET
          status = excluded.status,
          percent_complete = excluded.percent_complete,
          notes = CASE WHEN excluded.notes != '' THEN excluded.notes ELSE resource_progress.notes END,
+         last_position_seconds = CASE WHEN ? IS NOT NULL THEN excluded.last_position_seconds ELSE resource_progress.last_position_seconds END,
+         completed_item_ids = CASE WHEN ? IS NOT NULL THEN excluded.completed_item_ids ELSE resource_progress.completed_item_ids END,
          completed_at = CASE WHEN excluded.status = 'completed' THEN COALESCE(resource_progress.completed_at, excluded.completed_at) ELSE NULL END,
          updated_at = excluded.updated_at;`,
-      [userId, resourceId, safeStatus, effPercent, notes, completedAt, now]
+      [
+        userId,
+        resourceId,
+        safeStatus,
+        effPercent,
+        notes,
+        safePosition,
+        safeCompletedJson,
+        completedAt,
+        now,
+        safePosition,
+        safeCompletedJson,
+      ]
     );
 
     return {
@@ -186,6 +312,8 @@ export const resourceService = {
       resourceId,
       status: safeStatus,
       percentComplete: effPercent,
+      lastPositionSeconds: safePosition !== null ? safePosition : undefined,
+      completedItemIds: safeCompletedJson ? JSON.parse(safeCompletedJson) : undefined,
       completedAt,
       updatedAt: now,
     };
