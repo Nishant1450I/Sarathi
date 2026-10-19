@@ -126,8 +126,8 @@ router.get('/my-passport', requireAuth, (req, res, next) => {
     if (!req.user || !req.user.id) {
       return res.status(401).json({ error: 'Authentication required' });
     }
-    if (req.user.globalRole !== 'candidate') {
-      return res.status(403).json({ error: 'Only candidates can access their personal passport' });
+    if (req.user.globalRole !== 'candidate' && req.user.globalRole !== 'student') {
+      return res.status(403).json({ error: 'Only candidates and students can access their personal passport' });
     }
     const { jobId } = req.query;
     const passport = candidateService.getCandidatePassport(req.user.id, jobId);
@@ -148,8 +148,8 @@ router.post('/evidence', requireAuth, (req, res, next) => {
     if (!req.user || !req.user.id) {
       return res.status(401).json({ error: 'Authentication required' });
     }
-    if (req.user.globalRole !== 'candidate') {
-      return res.status(403).json({ error: 'Only candidates can submit project evidence' });
+    if (req.user.globalRole !== 'candidate' && req.user.globalRole !== 'student') {
+      return res.status(403).json({ error: 'Only candidates and students can submit evidence' });
     }
     const {
       title,
@@ -158,7 +158,8 @@ router.post('/evidence', requireAuth, (req, res, next) => {
       liveDemoUrl,
       skillsDemonstrated,
       technologies,
-      domainId
+      domainId,
+      evidenceType,
     } = req.body;
 
     const result = candidateService.submitCandidateEvidence({
@@ -169,7 +170,8 @@ router.post('/evidence', requireAuth, (req, res, next) => {
       liveDemoUrl,
       skillsDemonstrated,
       technologies,
-      domainId
+      domainId,
+      evidenceType,
     });
 
     res.status(201).json({

@@ -7,7 +7,7 @@
 //  - Timestamps are ISO-8601 UTC.
 //  - Multi-tenant RBAC and candidate privacy boundaries are enforced at the schema and service level.
 
-export const SCHEMA_VERSION = 7;
+export const SCHEMA_VERSION = 8;
 
 export const ddl = `
 -- ============ ORGANISATIONS ============
@@ -474,43 +474,65 @@ CREATE TABLE IF NOT EXISTS password_resets (
 
 -- ============ PASSPORT SHARES ============
 CREATE TABLE IF NOT EXISTS passport_shares (
-  user_id    TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-  public_id  TEXT NOT NULL UNIQUE,
-  is_public  INTEGER NOT NULL DEFAULT 1,
-  created_at TEXT NOT NULL
+  user_id         TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  public_id       TEXT NOT NULL UNIQUE,
+  is_public       INTEGER NOT NULL DEFAULT 1,
+  sections_config TEXT NOT NULL DEFAULT '{"includeSkills":true,"includeProjects":true,"includeContact":false,"includeAssessments":true}',
+  created_at      TEXT NOT NULL
 );
 
 -- ============ LEARNING RESOURCES ============
 CREATE TABLE IF NOT EXISTS learning_resources (
-  id          TEXT PRIMARY KEY,
-  domain      TEXT NOT NULL,
-  skill_tags  TEXT NOT NULL DEFAULT '[]',
-  title       TEXT NOT NULL,
-  provider    TEXT NOT NULL,
-  type        TEXT NOT NULL DEFAULT 'course',
-  url         TEXT NOT NULL,
-  is_free     INTEGER NOT NULL DEFAULT 1,
-  level       TEXT NOT NULL DEFAULT 'Beginner',
-  duration    TEXT NOT NULL DEFAULT '',
-  language    TEXT NOT NULL DEFAULT 'English',
-  created_at  TEXT NOT NULL
+  id                  TEXT PRIMARY KEY,
+  domain              TEXT NOT NULL,
+  skill_tags          TEXT NOT NULL DEFAULT '[]',
+  title               TEXT NOT NULL,
+  provider            TEXT NOT NULL,
+  type                TEXT NOT NULL DEFAULT 'course',
+  url                 TEXT NOT NULL,
+  is_free             INTEGER NOT NULL DEFAULT 1,
+  level               TEXT NOT NULL DEFAULT 'Beginner',
+  duration            TEXT NOT NULL DEFAULT '',
+  language            TEXT NOT NULL DEFAULT 'English',
+  description         TEXT NOT NULL DEFAULT '',
+  learning_objectives TEXT NOT NULL DEFAULT '[]',
+  prerequisites       TEXT NOT NULL DEFAULT '[]',
+  created_at          TEXT NOT NULL
 );
 
 -- ============ RESOURCE BOOKMARKS ============
 CREATE TABLE IF NOT EXISTS resource_bookmarks (
-  user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  resource_id TEXT NOT NULL REFERENCES learning_resources(id) ON DELETE CASCADE,
-  created_at  TEXT NOT NULL,
+  user_id         TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  resource_id     TEXT NOT NULL REFERENCES learning_resources(id) ON DELETE CASCADE,
+  collection_name TEXT NOT NULL DEFAULT 'my_list',
+  created_at      TEXT NOT NULL,
   PRIMARY KEY (user_id, resource_id)
 );
 
 -- ============ RESOURCE PROGRESS ============
 CREATE TABLE IF NOT EXISTS resource_progress (
-  user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  resource_id TEXT NOT NULL REFERENCES learning_resources(id) ON DELETE CASCADE,
-  status      TEXT NOT NULL DEFAULT 'not_started',
-  updated_at  TEXT NOT NULL,
+  user_id          TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  resource_id      TEXT NOT NULL REFERENCES learning_resources(id) ON DELETE CASCADE,
+  status           TEXT NOT NULL DEFAULT 'not_started',
+  percent_complete INTEGER NOT NULL DEFAULT 0,
+  notes            TEXT NOT NULL DEFAULT '',
+  completed_at     TEXT,
+  updated_at       TEXT NOT NULL,
   PRIMARY KEY (user_id, resource_id)
+);
+
+-- ============ STUDENT RESUMES ============
+CREATE TABLE IF NOT EXISTS student_resumes (
+  id              TEXT PRIMARY KEY,
+  user_id         TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title           TEXT NOT NULL,
+  target_role     TEXT,
+  template_id     TEXT NOT NULL DEFAULT 'modern-ats',
+  sections_config TEXT NOT NULL DEFAULT '{}',
+  custom_content  TEXT NOT NULL DEFAULT '{}',
+  is_default      INTEGER NOT NULL DEFAULT 0,
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL
 );
 
 -- ============ NOTIFICATIONS ============
@@ -729,6 +751,7 @@ CREATE INDEX IF NOT EXISTS idx_assessment_sessions_domain ON assessment_sessions
 CREATE INDEX IF NOT EXISTS idx_integrity_events_session ON integrity_events(session_id);
 CREATE INDEX IF NOT EXISTS idx_integrity_reviews_session ON integrity_reviews(session_id);
 CREATE INDEX IF NOT EXISTS idx_assessment_questions_domain ON assessment_questions(domain_id, skill_id);
+CREATE INDEX IF NOT EXISTS idx_student_resumes_user ON student_resumes(user_id);
 CREATE INDEX IF NOT EXISTS idx_auth_identities_user ON auth_identities(user_id);
 CREATE INDEX IF NOT EXISTS idx_auth_identities_provider_sub ON auth_identities(provider, provider_subject);
 CREATE INDEX IF NOT EXISTS idx_invitations_email ON account_invitations(email);

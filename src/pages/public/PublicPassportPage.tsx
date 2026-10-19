@@ -89,7 +89,6 @@ export const PublicPassportPage: React.FC = () => {
   }
 
   const { candidate, skills = [], evidence = [] } = passportData;
-  const verifiedSkills = skills.filter((s: any) => s.verification_status === 'verified');
 
   return (
     <div className="min-h-screen bg-[#F4F7FC] py-10 px-4 sm:px-6">
@@ -181,67 +180,84 @@ export const PublicPassportPage: React.FC = () => {
           )}
         </Card>
 
-        {/* Verified Skills Grid */}
-        <Card className="p-8 space-y-6">
-          <div className="flex items-center justify-between border-b border-[#E0E7F2] pb-4">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
-                <Award className="w-4 h-4" />
+        {/* Skills Grid (Respecting Privacy Config) */}
+        {passportData.sectionsConfig?.includeSkills !== false && skills.length > 0 && (
+          <Card className="p-8 space-y-6">
+            <div className="flex items-center justify-between border-b border-[#E0E7F2] pb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                  <Award className="w-4 h-4" />
+                </div>
+                <div>
+                  <h2 className="font-extrabold text-[#0B1B43] text-lg">Competencies & Assessed Skills</h2>
+                  <p className="text-xs text-[#405B8B]">
+                    Transparent skill portfolio backed by diagnostic tests, repository submissions, and coursework
+                  </p>
+                </div>
               </div>
-              <div>
-                <h2 className="font-extrabold text-[#0B1B43] text-lg">Verified Competencies & Skills</h2>
-                <p className="text-xs text-[#405B8B]">
-                  Authenticated via technical diagnostic tests and human code review
-                </p>
-              </div>
+              <Badge variant="purple">{skills.length} Skills</Badge>
             </div>
-            <Badge variant="success">{verifiedSkills.length} Verified Skills</Badge>
-          </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {skills.map((skill: any) => {
-              const isVerified = skill.verification_status === 'verified';
-              return (
-                <div
-                  key={skill.skill_id}
-                  className={`p-4 rounded-2xl border transition-all ${
-                    isVerified
-                      ? 'bg-emerald-50/40 border-emerald-200'
-                      : 'bg-white border-[#E0E7F2]'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-extrabold text-sm text-[#0B1B43]">
-                      {skill.skill_name}
-                    </span>
-                    {isVerified ? (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
-                        <CheckCircle2 className="w-3 h-3" />
-                        Verified
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {skills.map((skill: any) => {
+                const status = skill.verification_status || 'self_reported';
+                const isVerified = status === 'verified';
+                const isEvaluated = status === 'diagnostic_tested' || status === 'assessment-completed';
+                const isPending = status === 'pending_review';
+
+                return (
+                  <div
+                    key={skill.skill_id}
+                    className={`p-4 rounded-2xl border transition-all ${
+                      isVerified
+                        ? 'bg-emerald-50/40 border-emerald-200'
+                        : isEvaluated
+                        ? 'bg-blue-50/40 border-blue-200'
+                        : 'bg-white border-[#E0E7F2]'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-extrabold text-sm text-[#0B1B43]">
+                        {skill.skill_name}
                       </span>
-                    ) : (
-                      <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
-                        In Review
+                      {isVerified ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                          <CheckCircle2 className="w-3 h-3" />
+                          Verified
+                        </span>
+                      ) : isEvaluated ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">
+                          <CheckCircle2 className="w-3 h-3" />
+                          Evaluated
+                        </span>
+                      ) : isPending ? (
+                        <span className="text-[10px] font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full">
+                          In Review
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
+                          Self-Reported
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between text-xs text-[#405B8B] mt-2">
+                      <span>Proficiency Level</span>
+                      <span className="font-bold text-[#0B1B43]">Level {skill.proficiency} / 5</span>
+                    </div>
+                    {skill.domain_title && (
+                      <span className="text-[10px] font-semibold text-[#405B8B] mt-1 block">
+                        {skill.domain_title}
                       </span>
                     )}
                   </div>
-                  <div className="flex items-center justify-between text-xs text-[#405B8B] mt-2">
-                    <span>Proficiency Level</span>
-                    <span className="font-bold text-[#0B1B43]">Level {skill.proficiency} / 5</span>
-                  </div>
-                  {skill.domain_title && (
-                    <span className="text-[10px] font-semibold text-[#405B8B] mt-1 block">
-                      {skill.domain_title}
-                    </span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </Card>
+                );
+              })}
+            </div>
+          </Card>
+        )}
 
-        {/* Project Evidence Card */}
-        {evidence.length > 0 && (
+        {/* Project Evidence Card (Respecting Privacy Config) */}
+        {passportData.sectionsConfig?.includeProjects !== false && evidence.length > 0 && (
           <Card className="p-8 space-y-6">
             <div className="flex items-center gap-2.5 border-b border-[#E0E7F2] pb-4">
               <div className="w-8 h-8 rounded-lg bg-blue-50 text-[#087BFA] flex items-center justify-center">
