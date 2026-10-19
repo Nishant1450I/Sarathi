@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { MessageSquare } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { MessageSquare, Sparkles } from 'lucide-react';
 import { recruiterApi } from '../../services/recruiterApiService';
 import type { ApplicationItem, JobItem, CandidatePassport } from '../../services/recruiterApiService';
 import { useRecruiter } from '../../context/RecruiterContext';
@@ -128,6 +129,15 @@ export const RecruiterPipelinePage: React.FC = () => {
                 <option key={j.id} value={j.id}>{j.title}</option>
               ))}
             </select>
+
+            <Link
+              to={selectedJobId ? `/recruiter/matching?jobId=${selectedJobId}` : '/recruiter/matching'}
+              className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-indigo-200 text-[#4F46E5] bg-indigo-50 hover:bg-indigo-100 font-bold text-xs transition-colors shadow-2xs"
+              title="View Candidate Matches"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>AI Match View</span>
+            </Link>
           </div>
         }
       />

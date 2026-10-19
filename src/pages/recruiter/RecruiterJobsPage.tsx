@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Plus,
   Search,
@@ -8,7 +9,8 @@ import {
   Edit2,
   Trash2,
   CheckCircle,
-  PauseCircle
+  PauseCircle,
+  Sparkles
 } from 'lucide-react';
 import { recruiterApi } from '../../services/recruiterApiService';
 import type { JobItem, DomainItem, SkillItem, JobSkillReq } from '../../services/recruiterApiService';
@@ -334,9 +336,21 @@ export const RecruiterJobsPage: React.FC = () => {
 
               {/* Bottom Lifecycle Actions & Applicant Count */}
               <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-700">
-                  <strong className="text-indigo-600 font-black">{job.applicant_count || 0}</strong> Applicants
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-700">
+                    <strong className="text-indigo-600 font-black">{job.applicant_count || 0}</strong> Applicants
+                  </span>
+                  {job.status === 'published' && (job.applicant_count || 0) > 0 && (
+                    <Link
+                      to={`/recruiter/matching?jobId=${job.id}`}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-[10px] transition-colors"
+                      title="AI Candidate Matching"
+                    >
+                      <Sparkles className="w-3 h-3 text-indigo-600" />
+                      <span>Match</span>
+                    </Link>
+                  )}
+                </div>
 
                 <div className="flex items-center gap-2">
                   {job.status === 'draft' && (
