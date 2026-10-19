@@ -33,6 +33,20 @@ frontend.on('error', (err) => {
   console.error('\x1b[31m[Frontend Error]\x1b[0m', err);
 });
 
+backend.on('close', (code) => {
+  if (code !== 0 && code !== null) {
+    console.log(`\x1b[31m[Backend]\x1b[0m Process exited with code ${code}`);
+  }
+  cleanup();
+});
+
+frontend.on('close', (code) => {
+  if (code !== 0 && code !== null) {
+    console.log(`\x1b[31m[Frontend]\x1b[0m Process exited with code ${code}`);
+  }
+  cleanup();
+});
+
 function cleanup() {
   console.log('\n\x1b[33m%s\x1b[0m', 'Shutting down SARATHI services...');
   if (process.platform === 'win32') {
