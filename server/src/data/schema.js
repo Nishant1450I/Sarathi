@@ -7,7 +7,7 @@
 //  - Timestamps are ISO-8601 UTC.
 //  - Multi-tenant RBAC and candidate privacy boundaries are enforced at the schema and service level.
 
-export const SCHEMA_VERSION = 9;
+export const SCHEMA_VERSION = 10;
 
 export const ddl = `
 -- ============ ORGANISATIONS ============
@@ -326,6 +326,31 @@ CREATE TABLE IF NOT EXISTS skill_gap_items (
   gap_status            TEXT NOT NULL,
   recommendation        TEXT,
   created_at            TEXT NOT NULL
+);
+
+-- ============ CANDIDATE JOB MATCH EVALUATIONS ============
+CREATE TABLE IF NOT EXISTS job_match_evaluations (
+  id                       TEXT PRIMARY KEY,
+  job_id                   TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+  candidate_id             TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  application_id           TEXT REFERENCES applications(id) ON DELETE CASCADE,
+  match_score              REAL NOT NULL,
+  skill_score              REAL NOT NULL,
+  experience_score         REAL NOT NULL,
+  education_score          REAL NOT NULL,
+  evidence_score           REAL NOT NULL,
+  required_skill_coverage  REAL NOT NULL,
+  preferred_skill_coverage REAL NOT NULL,
+  breakdown_json           TEXT NOT NULL,
+  ai_summary               TEXT,
+  ai_strengths             TEXT,
+  ai_gaps                  TEXT,
+  ai_recommendation        TEXT,
+  ai_questions             TEXT,
+  ai_provider              TEXT NOT NULL DEFAULT 'rule_based',
+  calculated_at            TEXT NOT NULL,
+  updated_at               TEXT NOT NULL,
+  UNIQUE(job_id, candidate_id)
 );
 
 -- ============ APPLICATIONS & PIPELINE ============
@@ -808,6 +833,8 @@ CREATE INDEX IF NOT EXISTS idx_integrity_events_session ON integrity_events(sess
 CREATE INDEX IF NOT EXISTS idx_integrity_reviews_session ON integrity_reviews(session_id);
 CREATE INDEX IF NOT EXISTS idx_assessment_questions_domain ON assessment_questions(domain_id, skill_id);
 CREATE INDEX IF NOT EXISTS idx_student_resumes_user ON student_resumes(user_id);
+CREATE INDEX IF NOT EXISTS idx_job_matches_job ON job_match_evaluations(job_id);
+CREATE INDEX IF NOT EXISTS idx_job_matches_candidate ON job_match_evaluations(candidate_id);
 CREATE INDEX IF NOT EXISTS idx_auth_identities_user ON auth_identities(user_id);
 CREATE INDEX IF NOT EXISTS idx_auth_identities_provider_sub ON auth_identities(provider, provider_subject);
 CREATE INDEX IF NOT EXISTS idx_invitations_email ON account_invitations(email);

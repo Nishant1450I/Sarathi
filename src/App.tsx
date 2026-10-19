@@ -43,6 +43,7 @@ import { RecruiterAnalyticsPage } from './pages/recruiter/RecruiterAnalyticsPage
 import { RecruiterCompanyPage } from './pages/recruiter/RecruiterCompanyPage';
 import { RecruiterTeamPage } from './pages/recruiter/RecruiterTeamPage';
 import { RecruiterSettingsPage } from './pages/recruiter/RecruiterSettingsPage';
+import { RecruiterCandidateMatchingPage } from './pages/recruiter/RecruiterCandidateMatchingPage';
 
 // College Dashboard & 404
 import { CollegeDashboard } from './pages/college/CollegeDashboard';
@@ -90,6 +91,7 @@ export const App: React.FC = () => {
             <Route path="dashboard" element={<RecruiterDashboard />} />
             <Route path="overview" element={<Navigate to="/recruiter/dashboard" replace />} />
             <Route path="jobs" element={<RecruiterJobsPage />} />
+            <Route path="matching" element={<RecruiterCandidateMatchingPage />} />
             <Route path="candidates" element={<RecruiterCandidatesPage />} />
             <Route path="pipeline" element={<RecruiterPipelinePage />} />
             <Route path="verifications" element={<RecruiterVerificationsPage />} />

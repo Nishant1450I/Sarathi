@@ -23,7 +23,8 @@ import {
   Menu,
   X,
   ExternalLink,
-  GraduationCap
+  GraduationCap,
+  Sparkles
 } from 'lucide-react';
 import { RecruiterProvider, useRecruiter } from '../context/RecruiterContext';
 import { useAuth } from '../context/AuthContext';
@@ -46,6 +47,7 @@ export const recruiterNavSections: RecruiterNavSection[] = [
     title: 'Talent Acquisition',
     items: [
       { label: 'Overview', path: '/recruiter/dashboard', icon: LayoutDashboard },
+      { label: 'Candidate Matching', path: '/recruiter/matching', icon: Sparkles },
       { label: 'Find Candidates', path: '/recruiter/candidates', icon: Users },
       { label: 'Jobs & Postings', path: '/recruiter/jobs', icon: Briefcase },
       { label: 'Applicants & Pipeline', path: '/recruiter/pipeline', icon: GitPullRequest },

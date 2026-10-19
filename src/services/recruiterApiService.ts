@@ -237,6 +237,130 @@ export interface DashboardMetrics {
   }>;
 }
 
+export interface CandidateJobMatchItem {
+  applicationId: string;
+  candidateId: string;
+  candidateName: string;
+  candidateEmail: string;
+  candidateAvatar: string | null;
+  headline: string | null;
+  targetRole: string | null;
+  experienceYears: number;
+  location: string | null;
+  degree: string | null;
+  institution: string | null;
+  repoCount: number;
+  stage: string;
+  appliedAt: string;
+  coverNote: string | null;
+  notesCount: number;
+  matchScore: number;
+  skillScore: number;
+  experienceScore: number;
+  educationScore: number;
+  evidenceScore: number;
+  requiredSkillCoverage: number;
+  preferredSkillCoverage: number;
+  matchedRequired: Array<{
+    skillId: string;
+    skillName: string;
+    targetProficiency: number;
+    candidateProficiency: number;
+    verificationStatus: string;
+  }>;
+  matchedPreferred: Array<{
+    skillId: string;
+    skillName: string;
+    targetProficiency: number;
+    candidateProficiency: number;
+    verificationStatus: string;
+  }>;
+  unmetRequirements: Array<{
+    skillId: string;
+    skillName: string;
+    requirementType: string;
+    targetProficiency: number;
+    candidateProficiency: number;
+    status: string;
+    reason: string;
+  }>;
+  unverifiedSkills: Array<{
+    skillId: string;
+    skillName: string;
+    requirementType: string;
+    targetProficiency: number;
+    candidateProficiency: number;
+    verificationStatus: string;
+    reason: string;
+  }>;
+  explanation: string;
+  aiSummary: string;
+  aiStrengths: string[];
+  aiGaps: string[];
+  aiRecommendation: 'strongly_recommended' | 'recommended' | 'needs_assessment' | 'not_recommended';
+  aiQuestions: string[];
+  aiProvider: string;
+  calculatedAt: string;
+}
+
+export interface JobMatchingResponse {
+  job: {
+    id: string;
+    title: string;
+    department: string;
+    experienceLevel: string;
+    status: string;
+    skills: Array<{
+      skill_id: string;
+      skill_name: string;
+      requirement_type: string;
+      target_proficiency: number;
+    }>;
+  };
+  metrics: {
+    totalApplicants: number;
+    shortlistedCount: number;
+    avgMatchScore: number;
+    topMatchScore: number;
+    aiProvider: string;
+  };
+  candidates: CandidateJobMatchItem[];
+}
+
+export interface ShortlistCandidateParams {
+  applicationId: string;
+  candidateId: string;
+  jobId: string;
+  reason: string;
+  note?: string;
+  shortlistId?: string | null;
+}
+
+export interface JobComparisonResult {
+  job: {
+    id: string;
+    title: string;
+    department: string;
+    experienceLevel: string;
+  };
+  candidates: any[];
+  competencyMatrix: Array<{
+    skillId: string;
+    skillName: string;
+    category?: string;
+    requirementType: string;
+    targetProficiency: number;
+    weight: number;
+    candidates: Array<{
+      candidateId: string;
+      proficiency: number;
+      verificationStatus: string;
+      status: string;
+      badge: string;
+    }>;
+  }>;
+}
+
 export interface ApplicationItem {
   id: string;
   job_id: string;
@@ -581,6 +705,72 @@ class RecruiterApiService {
       method: 'POST',
       body: JSON.stringify(data),
     });
+  }
+
+  // AI-Powered Candidate-Job Matching & Shortlisting
+  public async getJobCandidateMatches(jobId: string, params: {
+    minScore?: number;
+    stage?: string;
+    search?: string;
+    requiredSkill?: string;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+    forceRefresh?: boolean;
+  } = {}): Promise<JobMatchingResponse> {
+    const searchParams = new URLSearchParams();
+    if (params.minScore) searchParams.append('minScore', String(params.minScore));
+    if (params.stage && params.stage !== 'all') searchParams.append('stage', params.stage);
+    if (params.search) searchParams.append('search', params.search);
+    if (params.requiredSkill) searchParams.append('requiredSkill', params.requiredSkill);
+    if (params.sortBy) searchParams.append('sortBy', params.sortBy);
+    if (params.sortOrder) searchParams.append('sortOrder', params.sortOrder);
+    if (params.forceRefresh) searchParams.append('forceRefresh', 'true');
+
+    const qs = searchParams.toString();
+    const res = await this.request<{ success: boolean; data: JobMatchingResponse }>(
+      `/matching/jobs/${jobId}/candidates${qs ? `?${qs}` : ''}`
+    );
+    return res.data;
+  }
+
+  public async evaluateJobCandidate(jobId: string, candidateId?: string, forceRefresh: boolean = true): Promise<any> {
+    const res = await this.request<{ success: boolean; data: any }>(
+      `/matching/jobs/${jobId}/evaluate`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ candidateId, forceRefresh }),
+      }
+    );
+    return res.data;
+  }
+
+  public async shortlistCandidateWithReason(data: ShortlistCandidateParams): Promise<any> {
+    const res = await this.request<{ success: boolean; data: any }>(
+      '/matching/shortlist',
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }
+    );
+    return res.data;
+  }
+
+  public async compareJobCandidates(jobId: string, candidateIds: string[]): Promise<JobComparisonResult> {
+    const res = await this.request<{ success: boolean; data: JobComparisonResult }>(
+      '/matching/compare',
+      {
+        method: 'POST',
+        body: JSON.stringify({ jobId, candidateIds }),
+      }
+    );
+    return res.data;
+  }
+
+  public async getJobShortlistedCandidates(jobId: string): Promise<any[]> {
+    const res = await this.request<{ success: boolean; data: any[] }>(
+      `/matching/jobs/${jobId}/shortlisted`
+    );
+    return res.data;
   }
 }
 

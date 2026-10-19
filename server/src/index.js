@@ -24,6 +24,7 @@ import notificationRoutes from './routes/notificationRoutes.js';
 import feedbackRoutes from './routes/feedbackRoutes.js';
 import passportShareRoutes from './routes/passportShareRoutes.js';
 import resumeRoutes from './routes/resumeRoutes.js';
+import matchingRoutes from './routes/matchingRoutes.js';
 import skillEngineRoutes from './routes/skillEngineRoutes.js';
 import recruiterVerificationRoutes from './routes/recruiterVerificationRoutes.js';
 
@@ -109,6 +110,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api/passport', passportShareRoutes);
 app.use('/api/resumes', resumeRoutes);
+app.use('/api/matching', matchingRoutes);
 app.use('/api/skills', skillEngineRoutes);
 app.use('/api/recruiter/verify', recruiterVerificationRoutes);
 
