@@ -39,9 +39,20 @@ try {
 const app = express();
 
 // Security headers
+const isProduction = appConfig.env === 'production' && appConfig.mode !== 'demo';
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
-  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
+  contentSecurityPolicy: isProduction ? {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", 'https://www.youtube.com', 'https://s.ytimg.com'],
+      frameSrc: ["'self'", 'https://www.youtube.com', 'https://www.youtube-nocookie.com'],
+      imgSrc: ["'self'", 'data:', 'https:', 'https://i.ytimg.com'],
+      connectSrc: ["'self'", 'https://www.youtube.com'],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+    }
+  } : false,
 }));
 
 // CORS middleware

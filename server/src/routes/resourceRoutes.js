@@ -9,6 +9,8 @@ const router = Router();
 const progressSchema = z.object({
   status: z.enum(['not_started', 'in_progress', 'completed']),
   percentComplete: z.number().min(0).max(100).optional().nullable(),
+  lastPositionSeconds: z.number().min(0).optional().nullable(),
+  completedItemIds: z.array(z.string()).optional().nullable(),
   notes: z.string().max(1000).optional().nullable(),
 });
 
@@ -18,32 +20,72 @@ const bookmarkSchema = z.object({
 
 router.get('/', (req, res, next) => {
   try {
-    const { domain, skill, isFree, level, status, collection, search, bookmarkedOnly } = req.query;
+    const {
+      domain,
+      skill,
+      type,
+      format,
+      isFree,
+      free,
+      level,
+      status,
+      collection,
+      search,
+      q,
+      sort,
+      page,
+      pageSize,
+      bookmarkedOnly,
+    } = req.query;
     const userId = req.user?.id || null;
 
-    const resources = resourceService.listResources({
+    const shouldPaginate = page !== undefined || pageSize !== undefined;
+    const parsedPage = Math.max(1, parseInt(page, 10) || 1);
+    const parsedPageSize = Math.max(1, Math.min(100, parseInt(pageSize, 10) || 12));
+
+    const result = resourceService.listResources({
       domain: domain ? String(domain) : null,
       skill: skill ? String(skill) : null,
-      isFree: isFree !== undefined ? isFree : null,
+      format: (format || type) ? String(format || type) : null,
+      isFree: free !== undefined ? free : isFree,
       level: level ? String(level) : null,
       status: status ? String(status) : null,
       collection: collection ? String(collection) : null,
-      search: search ? String(search) : '',
-      bookmarkedOnly: bookmarkedOnly === 'true' || bookmarkedOnly === '1',
+      search: (q || search) ? String(q || search) : '',
+      sort: sort ? String(sort) : 'recommended',
+      page: parsedPage,
+      pageSize: parsedPageSize,
+      paginate: shouldPaginate,
+      bookmarkedOnly: bookmarkedOnly === 'true' || bookmarkedOnly === '1' || bookmarkedOnly === true,
       userId,
     });
 
-    res.json({
-      success: true,
-      data: resources,
-      totalCount: resources.length,
-    });
+    if (shouldPaginate) {
+      res.json({
+        success: true,
+        data: result.items,
+        pagination: {
+          page: result.page,
+          pageSize: result.pageSize,
+          totalCount: result.totalCount,
+          totalPages: result.totalPages,
+          hasMore: result.page < result.totalPages,
+        },
+        totalCount: result.totalCount,
+      });
+    } else {
+      res.json({
+        success: true,
+        data: result,
+        totalCount: result.length,
+      });
+    }
   } catch (err) {
     next(err);
   }
 });
 
-router.get('/recommendations', requireAuth, (req, res, next) => {
+const handleRecommendations = (req, res, next) => {
   try {
     const { targetRole, domainId } = req.query;
     const recommendations = resourceService.getRecommendations(req.user.id, {
@@ -55,6 +97,23 @@ router.get('/recommendations', requireAuth, (req, res, next) => {
       success: true,
       data: recommendations,
       totalCount: recommendations.length,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+router.get('/recommendations', requireAuth, handleRecommendations);
+router.get('/recommended', requireAuth, handleRecommendations);
+
+router.get('/:id/playlist', (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const items = resourceService.getPlaylistItems(id);
+    res.json({
+      success: true,
+      data: items,
+      totalCount: items.length,
     });
   } catch (err) {
     next(err);
@@ -79,10 +138,12 @@ router.post('/:id/bookmark', requireAuth, (req, res, next) => {
 router.post('/:id/progress', requireAuth, validateBody(progressSchema), (req, res, next) => {
   try {
     const { id } = req.params;
-    const { status, percentComplete, notes } = req.body;
+    const { status, percentComplete, lastPositionSeconds, completedItemIds, notes } = req.body;
     const result = resourceService.updateProgress(req.user.id, id, {
       status,
       percentComplete,
+      lastPositionSeconds,
+      completedItemIds,
       notes,
     });
     res.json({
