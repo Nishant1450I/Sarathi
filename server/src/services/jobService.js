@@ -1,5 +1,7 @@
 import { randomUUID as uuidv4 } from 'node:crypto';
 import { repository } from '../data/repository.js';
+import { recruiterVerification } from '../config/index.js';
+import { recruiterVerificationService } from './recruiterVerificationService.js';
 
 const VALID_TRANSITIONS = {
   draft: ['published', 'archived'],
@@ -190,6 +192,16 @@ export const jobService = {
       throw new Error('Job title and description are required');
     }
 
+    if (status === 'published' && recruiterVerification.required) {
+      const isVerified = recruiterVerificationService.isRecruiterAndOrgVerified(creatorId, orgId);
+      if (!isVerified) {
+        const err = new Error('Publishing job openings requires verified recruiter email and approved business credentials.');
+        err.code = 'RECRUITER_VERIFICATION_REQUIRED';
+        err.status = 403;
+        throw err;
+      }
+    }
+
     repository.transaction((repo) => {
       repo.execute(
         `INSERT INTO jobs (
@@ -241,6 +253,16 @@ export const jobService = {
         const allowed = VALID_TRANSITIONS[existing.status] || [];
         if (!allowed.includes(data.status)) {
           throw new Error(`Invalid status transition from ${existing.status} to ${data.status}`);
+        }
+
+        if (data.status === 'published' && recruiterVerification.required) {
+          const isVerified = recruiterVerificationService.isRecruiterAndOrgVerified(existing.creator_id, orgId);
+          if (!isVerified) {
+            const err = new Error('Publishing job openings requires verified recruiter email and approved business credentials.');
+            err.code = 'RECRUITER_VERIFICATION_REQUIRED';
+            err.status = 403;
+            throw err;
+          }
         }
       }
 

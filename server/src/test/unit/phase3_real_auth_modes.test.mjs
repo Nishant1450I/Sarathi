@@ -1,7 +1,7 @@
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { authService } from '../../services/authService.js';
-import { validateConfig } from '../../config/index.js';
+import { validateConfig, auth } from '../../config/index.js';
 import { initDb, getDb } from '../../config/db.js';
 import app from '../../index.js';
 
@@ -10,6 +10,7 @@ describe('Phase 3: Real Authentication & Operating Modes', () => {
   let baseUrl;
 
   before(async () => {
+    auth.enableDemoAuth = true;
     initDb();
 
     await new Promise((resolve) => {

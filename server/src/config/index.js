@@ -96,3 +96,17 @@ export const assessmentV2 = {
   practicalWeight: Number(process.env.ASSESSMENT_PRACTICAL_WEIGHT || 0.6),
 };
 
+const isProductionEnv = process.env.NODE_ENV === 'production' || process.env.APP_MODE === 'production';
+const verificationEnv = process.env.RECRUITER_VERIFICATION_REQUIRED;
+
+export const recruiterVerification = {
+  // Secure by default in production: required unless explicitly set to 'false'. In dev/demo, defaults to false.
+  required: verificationEnv !== undefined ? verificationEnv === 'true' : isProductionEnv,
+  otpExpiryMs: Number(process.env.RECRUITER_OTP_EXPIRY_MS || 15 * 60 * 1000), // 15 mins
+  resendCooldownMs: Number(process.env.RECRUITER_RESEND_COOLDOWN_MS || 60 * 1000), // 60s
+  maxOtpAttempts: Number(process.env.RECRUITER_MAX_OTP_ATTEMPTS || 5),
+  maxDocumentSizeBytes: Number(process.env.RECRUITER_MAX_DOC_BYTES || 5 * 1024 * 1024), // 5MB
+  uploadDir: resolve(root, 'data', 'uploads', 'verifications'),
+  emailProvider: process.env.EMAIL_PROVIDER || 'unconfigured', // 'smtp' or 'unconfigured'
+};
+

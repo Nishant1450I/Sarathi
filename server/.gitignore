@@ -3,6 +3,11 @@ dist/
 *.log
 data/development.db
 data/development.db-*
+data/*.bak*
+data/*.db-wal
+data/*.db-shm
+data/*.db-journal
+data/uploads/
 .env
 .env.*
 !.env.example

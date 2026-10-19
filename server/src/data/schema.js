@@ -12,14 +12,15 @@ export const SCHEMA_VERSION = 9;
 export const ddl = `
 -- ============ ORGANISATIONS ============
 CREATE TABLE IF NOT EXISTS organisations (
-  id         TEXT PRIMARY KEY,
-  name       TEXT NOT NULL,
-  slug       TEXT NOT NULL UNIQUE,
-  timezone   TEXT NOT NULL DEFAULT 'Asia/Kolkata',
-  currency   TEXT NOT NULL DEFAULT 'INR',
-  settings   TEXT NOT NULL DEFAULT '{}',
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
+  id                  TEXT PRIMARY KEY,
+  name                TEXT NOT NULL,
+  slug                TEXT NOT NULL UNIQUE,
+  timezone            TEXT NOT NULL DEFAULT 'Asia/Kolkata',
+  currency            TEXT NOT NULL DEFAULT 'INR',
+  verification_status TEXT NOT NULL DEFAULT 'unverified',
+  settings            TEXT NOT NULL DEFAULT '{}',
+  created_at          TEXT NOT NULL,
+  updated_at          TEXT NOT NULL
 );
 
 -- ============ INSTITUTIONS ============
@@ -34,20 +35,22 @@ CREATE TABLE IF NOT EXISTS institutions (
 
 -- ============ USERS ============
 CREATE TABLE IF NOT EXISTS users (
-  id             TEXT PRIMARY KEY,
-  email          TEXT NOT NULL UNIQUE,
-  password_hash  TEXT,
-  full_name      TEXT NOT NULL,
-  role           TEXT NOT NULL DEFAULT 'candidate',
-  status         TEXT NOT NULL DEFAULT 'active',
-  company_name   TEXT,
-  institution    TEXT,
-  institution_id TEXT REFERENCES institutions(id),
-  timezone       TEXT NOT NULL DEFAULT 'Asia/Kolkata',
-  avatar_url     TEXT,
-  created_at     TEXT NOT NULL,
-  updated_at     TEXT NOT NULL,
-  deleted_at     TEXT
+  id                TEXT PRIMARY KEY,
+  email             TEXT NOT NULL UNIQUE,
+  password_hash     TEXT,
+  full_name         TEXT NOT NULL,
+  role              TEXT NOT NULL DEFAULT 'candidate',
+  status            TEXT NOT NULL DEFAULT 'active',
+  email_verified    INTEGER NOT NULL DEFAULT 0,
+  email_verified_at TEXT,
+  company_name      TEXT,
+  institution       TEXT,
+  institution_id    TEXT REFERENCES institutions(id),
+  timezone          TEXT NOT NULL DEFAULT 'Asia/Kolkata',
+  avatar_url        TEXT,
+  created_at        TEXT NOT NULL,
+  updated_at        TEXT NOT NULL,
+  deleted_at        TEXT
 );
 
 -- ============ AUTH IDENTITIES (GOOGLE SSO / OAUTH) ============
@@ -748,6 +751,35 @@ CREATE TABLE IF NOT EXISTS practical_challenge_submissions (
   submitted_at       TEXT NOT NULL
 );
 
+-- ============ RECRUITER VERIFICATION & TOKENS ============
+CREATE TABLE IF NOT EXISTS auth_verification_tokens (
+  id          TEXT PRIMARY KEY,
+  user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash  TEXT NOT NULL,
+  token_type  TEXT NOT NULL CHECK(token_type IN ('email_otp', 'email_link', 'password_reset')),
+  attempts    INTEGER NOT NULL DEFAULT 0,
+  expires_at  TEXT NOT NULL,
+  used_at     TEXT,
+  created_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS recruiter_business_verifications (
+  id               TEXT PRIMARY KEY,
+  org_id           TEXT NOT NULL REFERENCES organisations(id) ON DELETE CASCADE,
+  user_id          TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  document_type    TEXT NOT NULL CHECK(document_type IN ('gstin', 'incorporation_cert', 'tax_id', 'business_pan')),
+  document_path    TEXT NOT NULL,
+  file_name        TEXT NOT NULL,
+  file_size_bytes  INTEGER NOT NULL,
+  mime_type        TEXT NOT NULL,
+  status           TEXT NOT NULL DEFAULT 'pending_review' CHECK(status IN ('pending_review', 'approved', 'rejected', 'resubmission_required')),
+  reviewer_id      TEXT REFERENCES users(id),
+  reviewer_notes   TEXT,
+  reviewed_at      TEXT,
+  created_at       TEXT NOT NULL,
+  updated_at       TEXT NOT NULL
+);
+
 -- ============ INDEXES ============
 CREATE INDEX IF NOT EXISTS idx_canonical_skill_profiles_user ON canonical_skill_profiles(candidate_id);
 CREATE INDEX IF NOT EXISTS idx_skill_evidence_ledger_user ON skill_evidence_ledger(candidate_id, skill_id);
@@ -780,5 +812,8 @@ CREATE INDEX IF NOT EXISTS idx_auth_identities_user ON auth_identities(user_id);
 CREATE INDEX IF NOT EXISTS idx_auth_identities_provider_sub ON auth_identities(provider, provider_subject);
 CREATE INDEX IF NOT EXISTS idx_invitations_email ON account_invitations(email);
 CREATE INDEX IF NOT EXISTS idx_auth_nonces_exp ON auth_nonces(expires_at);
+CREATE INDEX IF NOT EXISTS idx_verif_tokens_user ON auth_verification_tokens(user_id, token_type);
+CREATE INDEX IF NOT EXISTS idx_biz_verif_org ON recruiter_business_verifications(org_id, status);
+CREATE INDEX IF NOT EXISTS idx_biz_verif_user ON recruiter_business_verifications(user_id);
 
 `;

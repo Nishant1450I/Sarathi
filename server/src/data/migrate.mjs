@@ -1,7 +1,20 @@
+import { copyFileSync, existsSync } from 'node:fs';
 import { initDb, closeDb } from '../config/db.js';
+import { paths } from '../config/index.js';
 import { ddl, SCHEMA_VERSION } from './schema.js';
 
 export function runMigrations(dbFile) {
+  const targetFile = dbFile || paths.dbFile;
+  if (targetFile && targetFile !== ':memory:' && existsSync(targetFile)) {
+    try {
+      const backupPath = `${targetFile}.bak-${Date.now()}`;
+      copyFileSync(targetFile, backupPath);
+      console.log(`Database backup created at ${backupPath}`);
+    } catch (bErr) {
+      console.warn('Database backup warning:', bErr.message);
+    }
+  }
+
   const db = initDb(dbFile);
   console.log(`Starting migration to schema version ${SCHEMA_VERSION}...`);
 
@@ -159,6 +172,21 @@ export function runMigrations(dbFile) {
       }
       if (!colNames.has('institution_id')) {
         db.exec("ALTER TABLE users ADD COLUMN institution_id TEXT;");
+      }
+      if (!colNames.has('email_verified')) {
+        db.exec("ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0;");
+      }
+      if (!colNames.has('email_verified_at')) {
+        db.exec("ALTER TABLE users ADD COLUMN email_verified_at TEXT;");
+      }
+    }
+
+    const orgsCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='organisations';").get();
+    if (orgsCheck) {
+      const cols = db.prepare("PRAGMA table_info(organisations);").all();
+      const colNames = new Set(cols.map(c => c.name));
+      if (!colNames.has('verification_status')) {
+        db.exec("ALTER TABLE organisations ADD COLUMN verification_status TEXT NOT NULL DEFAULT 'unverified';");
       }
     }
 
