@@ -11,7 +11,7 @@ describe('Dashboard Routing & Navigation (PRD §4 & §7)', () => {
 
     const labels = careerSection?.items.map(item => item.label);
     expect(labels).toContain('Dashboard');
-    expect(labels).toContain('My Profile');
+    expect(labels).not.toContain('My Profile');
     expect(labels).not.toContain('Analytics');
 
     const paths = careerSection?.items.map(item => item.path);

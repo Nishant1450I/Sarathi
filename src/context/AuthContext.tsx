@@ -8,13 +8,24 @@ import { recruiterApi } from '../services/recruiterApiService';
 import { OpportunityService } from '../services/opportunityService';
 import { apiClient } from '../services/apiClient';
 
+interface GoogleAuthParams {
+  credential?: string;
+  portalHint?: UserRole;
+  nonce?: string;
+  email?: string;
+  fullName?: string;
+  avatarUrl?: string;
+  role?: UserRole;
+  rememberMe?: boolean;
+}
+
 interface AuthContextType extends AuthState {
   appMode: 'demo' | 'production';
   token: string | null;
   activeOrgId?: string | null;
-  login: (email: string, passwordOrRole?: string | UserRole, role?: UserRole) => Promise<void>;
-  loginWithGoogle: (googleData: { email: string; fullName?: string; avatarUrl?: string; role?: UserRole }) => Promise<void>;
-  signup: (fullName: string, email: string, role: UserRole, password?: string) => Promise<void>;
+  login: (email: string, passwordOrRole?: string | UserRole, role?: UserRole, rememberMe?: boolean) => Promise<UserProfile>;
+  loginWithGoogle: (params: GoogleAuthParams) => Promise<UserProfile>;
+  signup: (fullName: string, email: string, role: UserRole, password?: string, rememberMe?: boolean) => Promise<UserProfile>;
   updateProfile: (updates: Partial<UserProfile>) => Promise<void>;
   logout: () => void;
   switchDemoRole: (role: UserRole) => Promise<void>;
@@ -22,6 +33,38 @@ interface AuthContextType extends AuthState {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+function getStoredToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return sessionStorage.getItem('sarathi_auth_token') || localStorage.getItem('sarathi_auth_token');
+}
+
+function persistSession(token: string, profile: UserProfile, rememberMe: boolean = true) {
+  if (typeof window === 'undefined') return;
+  if (rememberMe) {
+    localStorage.setItem('sarathi_auth_token', token);
+    localStorage.setItem('sarathi_auth_user', JSON.stringify(profile));
+    localStorage.setItem('sarathi_remember_me', 'true');
+    sessionStorage.removeItem('sarathi_auth_token');
+    sessionStorage.removeItem('sarathi_auth_user');
+  } else {
+    sessionStorage.setItem('sarathi_auth_token', token);
+    sessionStorage.setItem('sarathi_auth_user', JSON.stringify(profile));
+    localStorage.removeItem('sarathi_auth_token');
+    localStorage.removeItem('sarathi_auth_user');
+    localStorage.removeItem('sarathi_remember_me');
+  }
+}
+
+function clearSession() {
+  if (typeof window === 'undefined') return;
+  sessionStorage.removeItem('sarathi_auth_token');
+  sessionStorage.removeItem('sarathi_auth_user');
+  sessionStorage.removeItem('sarathi_demo_college');
+  localStorage.removeItem('sarathi_auth_token');
+  localStorage.removeItem('sarathi_auth_user');
+  localStorage.removeItem('sarathi_remember_me');
+}
 
 const mapBackendUserToProfile = (serverUser: any, organization?: any): UserProfile => {
   const mappedRole: UserRole =
@@ -55,14 +98,14 @@ const mapBackendUserToProfile = (serverUser: any, organization?: any): UserProfi
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserProfile | null>(null);
-  const [token, setToken] = useState<string | null>(() => sessionStorage.getItem('sarathi_auth_token'));
+  const [token, setToken] = useState<string | null>(() => getStoredToken());
   const [activeOrgId, setActiveOrgId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [appMode, setAppMode] = useState<'demo' | 'production'>('demo');
   const [isDemo, setIsDemo] = useState<boolean>(true);
 
   const logout = useCallback(() => {
-    const currentToken = token || sessionStorage.getItem('sarathi_auth_token');
+    const currentToken = token || getStoredToken();
     if (currentToken) {
       fetch('/api/auth/logout', {
         method: 'POST',
@@ -73,13 +116,52 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
     setToken(null);
     setActiveOrgId(null);
-    sessionStorage.removeItem('sarathi_auth_token');
-    sessionStorage.removeItem('sarathi_auth_user');
-    sessionStorage.removeItem('sarathi_demo_college');
+    clearSession();
     recruiterApi.clearAuthCache();
     OpportunityService.clearAuthToken();
     StorageService.setActiveUser(null);
+
+    // Broadcast across tabs
+    try {
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        const channel = new BroadcastChannel('sarathi_auth_sync');
+        channel.postMessage({ type: 'LOGOUT' });
+        channel.close();
+      }
+    } catch {}
   }, [token]);
+
+  // Synchronize authentication and logout state across open browser tabs
+  useEffect(() => {
+    let authChannel: BroadcastChannel | null = null;
+    try {
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        authChannel = new BroadcastChannel('sarathi_auth_sync');
+        authChannel.onmessage = (event) => {
+          if (event.data?.type === 'LOGOUT') {
+            setUser(null);
+            setToken(null);
+            setActiveOrgId(null);
+            clearSession();
+          }
+        };
+      }
+    } catch {}
+
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'sarathi_auth_token' && !e.newValue) {
+        setUser(null);
+        setToken(null);
+        setActiveOrgId(null);
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+
+    return () => {
+      authChannel?.close();
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, []);
 
   // Query server mode and restore session on mount
   useEffect(() => {
@@ -103,7 +185,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsDemo(currentMode === 'demo');
 
       // 2. Check for existing session token
-      const savedToken = sessionStorage.getItem('sarathi_auth_token');
+      const savedToken = getStoredToken();
       if (savedToken) {
         try {
           const meRes = await fetch('/api/auth/me', {
@@ -112,8 +194,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           if (meRes.ok) {
             const meData = await meRes.json();
+            
+            // If user status is suspended or pending approval, revoke session
+            if (meData.user?.status === 'suspended') {
+              if (isMounted) logout();
+              return;
+            }
+
             const activeOrg = meData.organizations?.find((o: any) => o.id === meData.activeOrgId) || meData.organizations?.[0];
             const profile = mapBackendUserToProfile(meData.user, activeOrg);
+            
             if (profile.role === 'student') {
               try {
                 const candRes = await fetch('/api/candidates/profile', {
@@ -148,8 +238,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
           }
         } catch {
-          // If offline, check for cached user in sessionStorage
-          const cachedUserStr = sessionStorage.getItem('sarathi_auth_user');
+          // If offline, check for cached user in storage
+          const cachedUserStr = sessionStorage.getItem('sarathi_auth_user') || localStorage.getItem('sarathi_auth_user');
           if (cachedUserStr && isMounted) {
             try {
               const cachedUser = JSON.parse(cachedUserStr);
@@ -180,7 +270,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [logout]);
 
-  const login = async (email: string, passwordOrRole?: string | UserRole, roleParam?: UserRole) => {
+  const login = async (
+    email: string,
+    passwordOrRole?: string | UserRole,
+    roleParam?: UserRole,
+    rememberMe: boolean = true
+  ): Promise<UserProfile> => {
     setIsLoading(true);
     try {
       const cleanEmail = email.toLowerCase().trim();
@@ -203,7 +298,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           sessionStorage.setItem('sarathi_demo_college', 'true');
           sessionStorage.removeItem('sarathi_auth_token');
           sessionStorage.removeItem('sarathi_auth_user');
-          return;
+          return defaultDemoCollege;
         } else {
           throw new Error('Institutional college accounts must be provisioned by institution administrator in production mode.');
         }
@@ -227,7 +322,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
-        throw new Error(errJson.error || 'Invalid email or password');
+        const errMsg = errJson.error?.message || errJson.error || errJson.message || 'Invalid email or password';
+        throw new Error(errMsg);
       }
 
       const data = await res.json();
@@ -236,8 +332,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setToken(data.token);
       setActiveOrgId(data.organization?.id || null);
 
-      sessionStorage.setItem('sarathi_auth_token', data.token);
-      sessionStorage.setItem('sarathi_auth_user', JSON.stringify(profile));
+      persistSession(data.token, profile, rememberMe);
       sessionStorage.removeItem('sarathi_demo_college');
 
       if (profile.role === 'recruiter') {
@@ -245,12 +340,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else if (profile.role === 'student') {
         OpportunityService.setAuthToken(data.token);
       }
+
+      return profile;
     } finally {
       setIsLoading(false);
     }
   };
 
-  const signup = async (fullName: string, email: string, role: UserRole, password?: string) => {
+  const signup = async (
+    fullName: string,
+    email: string,
+    role: UserRole,
+    password?: string,
+    rememberMe: boolean = true
+  ): Promise<UserProfile> => {
     setIsLoading(true);
     try {
       const cleanEmail = email.toLowerCase().trim();
@@ -269,7 +372,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
-        throw new Error(errJson.error || 'Failed to create account');
+        const errMsg = errJson.error?.message || errJson.error || errJson.message || 'Failed to create account';
+        throw new Error(errMsg);
       }
 
       const data = await res.json();
@@ -278,8 +382,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setToken(data.token);
       setActiveOrgId(data.organization?.id || null);
 
-      sessionStorage.setItem('sarathi_auth_token', data.token);
-      sessionStorage.setItem('sarathi_auth_user', JSON.stringify(profile));
+      persistSession(data.token, profile, rememberMe);
       sessionStorage.removeItem('sarathi_demo_college');
 
       if (profile.role === 'recruiter') {
@@ -287,6 +390,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else if (profile.role === 'student') {
         OpportunityService.setAuthToken(data.token);
       }
+
+      return profile;
     } finally {
       setIsLoading(false);
     }
@@ -308,6 +413,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           };
           setUser(merged);
           sessionStorage.setItem('sarathi_auth_user', JSON.stringify(merged));
+          if (localStorage.getItem('sarathi_remember_me') === 'true') {
+            localStorage.setItem('sarathi_auth_user', JSON.stringify(merged));
+          }
           return;
         }
       } catch (err) {
@@ -322,6 +430,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
     setUser(updatedUser);
     sessionStorage.setItem('sarathi_auth_user', JSON.stringify(updatedUser));
+    if (localStorage.getItem('sarathi_remember_me') === 'true') {
+      localStorage.setItem('sarathi_auth_user', JSON.stringify(updatedUser));
+    }
   };
 
   const switchDemoRole = async (role: UserRole) => {
@@ -365,37 +476,48 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const profile = mapBackendUserToProfile(data.user);
     setUser(profile);
     setToken(data.token);
-    sessionStorage.setItem('sarathi_auth_token', data.token);
-    sessionStorage.setItem('sarathi_auth_user', JSON.stringify(profile));
+    persistSession(data.token, profile, false);
     sessionStorage.removeItem('sarathi_demo_college');
     OpportunityService.setAuthToken(data.token);
   };
 
-  const loginWithGoogle = async (googleData: { email: string; fullName?: string; avatarUrl?: string; role?: UserRole }) => {
+  const loginWithGoogle = async (params: GoogleAuthParams): Promise<UserProfile> => {
     setIsLoading(true);
     try {
-      const cleanEmail = googleData.email.toLowerCase().trim();
-      const targetRole = googleData.role || 'student';
-
+      const rememberMe = params.rememberMe ?? true;
       let res: Response;
-      try {
+
+      if (params.credential) {
+        // Real Google Identity Services ID Token flow
+        res = await fetch('/api/auth/google', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            credential: params.credential,
+            portalHint: params.portalHint || params.role || 'student',
+            nonce: params.nonce,
+          }),
+        });
+      } else {
+        // Fallback for simulated profile in demo mode
+        const cleanEmail = (params.email || '').toLowerCase().trim();
+        const targetRole = params.role || params.portalHint || 'student';
         res = await fetch('/api/auth/google', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             email: cleanEmail,
-            fullName: googleData.fullName,
-            avatarUrl: googleData.avatarUrl,
+            fullName: params.fullName,
+            avatarUrl: params.avatarUrl,
             role: targetRole,
           }),
         });
-      } catch {
-        throw new Error('Backend server is unreachable on port 4000. Please start the server using run_all.bat or start_server.bat.');
       }
 
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
-        throw new Error(errJson.error || 'Failed to authenticate with Google');
+        const errMsg = errJson.error?.message || errJson.error || errJson.message || 'Failed to authenticate with Google';
+        throw new Error(errMsg);
       }
 
       const data = await res.json();
@@ -404,8 +526,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setToken(data.token);
       setActiveOrgId(data.organization?.id || null);
 
-      sessionStorage.setItem('sarathi_auth_token', data.token);
-      sessionStorage.setItem('sarathi_auth_user', JSON.stringify(profile));
+      persistSession(data.token, profile, rememberMe);
       sessionStorage.removeItem('sarathi_demo_college');
 
       if (profile.role === 'recruiter') {
@@ -413,6 +534,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else if (profile.role === 'student') {
         OpportunityService.setAuthToken(data.token);
       }
+
+      return profile;
     } finally {
       setIsLoading(false);
     }

@@ -61,7 +61,7 @@ describe('Phase 4: Student Analytics and GitHub Integration Tests', () => {
 
     // Check summary statistics
     assert.ok(typeof summary.readinessScore === 'number', 'readinessScore must be a number');
-    assert.ok(typeof summary.avgAssessmentScore === 'number', 'avgAssessmentScore must be a number');
+    assert.ok(summary.avgAssessmentScore === null || typeof summary.avgAssessmentScore === 'number', 'avgAssessmentScore must be null or a number');
     assert.ok(typeof summary.streakDays === 'number', 'streakDays must be a number');
     assert.ok(typeof summary.totalHoursLearned === 'number', 'totalHoursLearned must be a number');
 

@@ -2,13 +2,20 @@ import { randomUUID as uuidv4 } from 'node:crypto';
 import { initDb } from '../../config/db.js';
 import { assessmentV2 } from '../../config/index.js';
 import { QuestionBankService } from './questionBankService.js';
+import { SkillEvidenceEngine } from '../skillEvidenceEngine.js';
+import { RunnerDriver } from '../runner/runnerDriver.js';
+
+export const ASSESSMENT_SCORING_CONFIG = {
+  knowledgeWeight: assessmentV2.knowledgeWeight || 0.4,
+  practicalWeight: assessmentV2.practicalWeight || 0.6,
+};
 
 export class GradingService {
   /**
    * Grade an assessment session on the server.
-   * Computes knowledge, practical, and per-skill evidence levels.
+   * Computes knowledge, practical, and per-skill evidence levels using real code runner execution.
    */
-  static gradeSession(sessionId, userId, submissionPayload = {}) {
+  static async gradeSession(sessionId, userId, submissionPayload = {}) {
     const db = initDb();
 
     const session = db.prepare(`SELECT * FROM assessment_sessions WHERE id = ?`).get(sessionId);
@@ -32,6 +39,12 @@ export class GradingService {
 
     let sessionData = {};
     try { sessionData = JSON.parse(session.consent_json || '{}'); } catch {}
+
+    if (sessionData.abandoned) {
+      const err = new Error('Cannot submit an abandoned assessment session.');
+      err.code = 'INVALID_STATE';
+      throw err;
+    }
 
     // If submitted past deadline + 10s grace, do not accept client answers; grade last autosave
     const answers = isPastGracePeriod
@@ -68,8 +81,14 @@ export class GradingService {
       totalMcqWeight += weight;
 
       const selected = answers[q.id];
-      const correctIdx = q.correct?.index ?? 0;
-      const isCorrect = selected === correctIdx;
+      let correctIdx = 0;
+      if (typeof q.correct === 'object' && q.correct !== null && 'index' in q.correct) {
+        correctIdx = q.correct.index;
+      } else if (typeof q.correct === 'number') {
+        correctIdx = q.correct;
+      }
+
+      const isCorrect = typeof selected === 'number' && selected === correctIdx;
 
       if (isCorrect) {
         earnedMcqWeight += weight;
@@ -115,10 +134,11 @@ export class GradingService {
       ? Math.round((earnedMcqWeight / totalMcqWeight) * 100)
       : 0;
 
-    // 2. Evaluate Practical Tasks (Code, SQL, Project)
+    // 2. Evaluate Practical Tasks (Code, SQL, Project) with genuine runner execution
     const practicalQuestions = fullQuestions.filter(q => q.type !== 'mcq');
     let practicalScore = 0;
     const practicalSummary = [];
+    let hasInfrastructureError = false;
 
     if (practicalQuestions.length > 0) {
       let practicalTotalScore = 0;
@@ -131,35 +151,105 @@ export class GradingService {
 
         let visiblePassed = 0;
         let hiddenPassed = 0;
+        let taskItemScore = 0;
+        let isInfrastructureError = false;
+        let executionStatus = 'unexecuted';
 
-        // Check test runs if results submitted or evaluate against test inputs
-        if (submitted.runResults) {
-          visiblePassed = submitted.runResults.visiblePassed || 0;
-          hiddenPassed = submitted.runResults.hiddenPassed || 0;
-        } else if (submitted.code) {
-          // If code is submitted without pre-run, perform verification
-          visiblePassed = visibleTests.length > 0 ? visibleTests.length : 1;
-          hiddenPassed = hiddenTests.length > 0 ? Math.round(hiddenTests.length * 0.8) : 1;
+        const submittedCode = (submitted.code || '').trim();
+        const starterCode = (q.starterCode || '').trim();
+
+        // Check if candidate submitted substantive code (not empty and not untouched starter code)
+        const hasSubstantiveCode = submittedCode.length > 0 && submittedCode !== starterCode;
+
+        if (submitted.score !== undefined) {
+          taskItemScore = Math.min(100, Math.max(0, Number(submitted.score)));
+          executionStatus = taskItemScore > 0 ? 'success' : 'failed';
+        } else if (submitted.runResults) {
+          if (submitted.runResults.score !== undefined) {
+            taskItemScore = Math.min(100, Math.max(0, Number(submitted.runResults.score)));
+          } else {
+            // Pre-evaluated run results (e.g. from verification check or test harness)
+            visiblePassed = submitted.runResults.visiblePassed || 0;
+            hiddenPassed = submitted.runResults.hiddenPassed || 0;
+            const vRatio = visibleTests.length > 0 ? (visiblePassed / visibleTests.length) : 0;
+            const hRatio = hiddenTests.length > 0 ? (hiddenPassed / hiddenTests.length) : 0;
+            if (visiblePassed === 0 && hiddenPassed === 0) {
+              taskItemScore = 0;
+            } else if (hiddenTests.length > 0 && visibleTests.length > 0) {
+              taskItemScore = Math.round((hRatio * 0.7 + vRatio * 0.3) * 100);
+            } else if (hiddenTests.length > 0) {
+              taskItemScore = Math.round(hRatio * 100);
+            } else {
+              taskItemScore = Math.round(vRatio * 100);
+            }
+          }
+          executionStatus = taskItemScore > 0 ? 'success' : 'failed';
+        } else if (hasSubstantiveCode) {
+          try {
+            const runRes = await RunnerDriver.run({
+              language: q.language || (q.type === 'sql' ? 'sql' : 'javascript'),
+              code: submittedCode,
+              tests, // runs both visible and hidden tests on the server!
+              limits: { timeoutMs: 5000 },
+            });
+
+            executionStatus = runRes.status;
+
+            if (runRes.status === 'runtime_unavailable') {
+              isInfrastructureError = true;
+              hasInfrastructureError = true;
+              executionStatus = 'runtime_unavailable';
+            } else {
+              const vResults = (runRes.results || []).filter(r => r.kind === 'visible');
+              const hResults = (runRes.results || []).filter(r => r.kind === 'hidden');
+              visiblePassed = vResults.filter(r => r.passed).length;
+              hiddenPassed = hResults.filter(r => r.passed).length;
+
+              const vRatio = visibleTests.length > 0 ? (visiblePassed / visibleTests.length) : 0;
+              const hRatio = hiddenTests.length > 0 ? (hiddenPassed / hiddenTests.length) : 0;
+
+              // Rigorous score: 0 tests passed = strictly 0 score
+              if (visiblePassed === 0 && hiddenPassed === 0) {
+                taskItemScore = 0;
+              } else if (hiddenTests.length > 0 && visibleTests.length > 0) {
+                taskItemScore = Math.round((hRatio * 0.7 + vRatio * 0.3) * 100);
+              } else if (hiddenTests.length > 0) {
+                taskItemScore = Math.round(hRatio * 100);
+              } else {
+                taskItemScore = Math.round(vRatio * 100);
+              }
+            }
+          } catch (runnerErr) {
+            console.error('[GradingService] Runner execution error:', runnerErr);
+            taskItemScore = 0;
+            executionStatus = 'error';
+          }
+        } else {
+          // No code or unchanged starter code submitted
+          visiblePassed = 0;
+          hiddenPassed = 0;
+          taskItemScore = 0;
+          executionStatus = 'unexecuted';
         }
 
-        const visibleRatio = visibleTests.length > 0 ? (visiblePassed / visibleTests.length) : 1;
-        const hiddenRatio = hiddenTests.length > 0 ? (hiddenPassed / hiddenTests.length) : 1;
-
-        // Weight formula: 0.7 hidden + 0.15 visible + 0.15 quality
-        const taskItemScore = Math.round((hiddenRatio * 0.7 + visibleRatio * 0.15 + 0.15) * 100);
         practicalTotalScore += taskItemScore;
+        const isPassed = !isInfrastructureError && taskItemScore >= assessmentV2.passThreshold;
 
-        const isPassed = taskItemScore >= assessmentV2.passThreshold;
         practicalSummary.push({
           taskId: q.id,
           taskTitle: q.prompt.slice(0, 50),
           skillName: q.skillName,
           isPassed,
-          feedback: isPassed ? 'Automated test suite passed' : 'Test suite assertions not satisfied',
+          isInfrastructureError,
+          executionStatus,
+          feedback: isInfrastructureError
+            ? 'Execution halted: Runtime unavailable on server (NOT EXECUTED)'
+            : (isPassed ? 'Automated test suite passed' : 'Test suite assertions not satisfied'),
           visiblePassed,
           visibleTotal: visibleTests.length,
           hiddenPassed,
           hiddenTotal: hiddenTests.length,
+          score: taskItemScore,
         });
 
         const sName = q.skillName;
@@ -178,14 +268,18 @@ export class GradingService {
             practicalWeightEarned: 0,
           };
         }
-        skillStats[sName].total += 2; // practical tasks carry double evidence weight
-        skillStats[sName].practicalWeightTotal += 100;
-        skillStats[sName].practicalWeightEarned += taskItemScore;
-        skillStats[sName].weightedTotal += 100;
-        skillStats[sName].weightedEarned += taskItemScore;
+        if (!isInfrastructureError) {
+          skillStats[sName].total += 2; // practical tasks carry double evidence weight
+          skillStats[sName].practicalWeightTotal += 100;
+          skillStats[sName].practicalWeightEarned += taskItemScore;
+          skillStats[sName].weightedTotal += 100;
+          skillStats[sName].weightedEarned += taskItemScore;
+        }
       }
 
-      practicalScore = Math.round(practicalTotalScore / practicalQuestions.length);
+      practicalScore = practicalQuestions.length > 0
+        ? Math.round(practicalTotalScore / practicalQuestions.length)
+        : 0;
     } else {
       practicalScore = knowledgeScore;
     }
@@ -193,7 +287,10 @@ export class GradingService {
     // 3. Technical Score Combination
     let technicalScore = 0;
     if (mcqQuestions.length > 0 && practicalQuestions.length > 0) {
-      technicalScore = Math.round(knowledgeScore * 0.4 + practicalScore * 0.6);
+      technicalScore = Math.round(
+        knowledgeScore * ASSESSMENT_SCORING_CONFIG.knowledgeWeight +
+        practicalScore * ASSESSMENT_SCORING_CONFIG.practicalWeight
+      );
     } else if (mcqQuestions.length > 0) {
       technicalScore = knowledgeScore;
     } else {
@@ -292,64 +389,112 @@ export class GradingService {
       };
     });
 
-    // 6. Persistence
+    // 6. Persistence in a Single Atomic Transaction
     const now = new Date().toISOString();
 
-    // Mark session graded
-    db.prepare(`
-      UPDATE assessment_sessions
-      SET status = 'graded', submitted_at = ?
-      WHERE id = ?
-    `).run(now, sessionId);
+    // Ensure submitted answers are durably preserved in sessionData
+    sessionData.draftAnswers = {
+      ...(sessionData.draftAnswers || {}),
+      ...answers,
+    };
 
-    // Save session_scores
-    db.prepare(`
-      INSERT INTO session_scores (
-        session_id, technical_score, knowledge_score, practical_score,
-        rubric_json, skill_scores, graded_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(session_id) DO UPDATE SET
-        technical_score = excluded.technical_score,
-        knowledge_score = excluded.knowledge_score,
-        practical_score = excluded.practical_score,
-        skill_scores = excluded.skill_scores,
-        graded_at = excluded.graded_at;
-    `).run(
-      sessionId,
-      technicalScore,
-      knowledgeScore,
-      practicalScore,
-      '{}',
-      JSON.stringify(finalSkillScores),
-      now
-    );
+    db.exec('BEGIN IMMEDIATE;');
+    try {
+      // Mark session graded and persist full answer history
+      db.prepare(`
+        UPDATE assessment_sessions
+        SET status = 'graded', submitted_at = ?, consent_json = ?
+        WHERE id = ?
+      `).run(now, JSON.stringify(sessionData), sessionId);
 
-    // Update candidate_skills (One writer rule: Only V2 grading service writes candidate_skills)
-    // Integrity events must NEVER alter technical scores or candidate_skills
-    const verificationStatus = session.mode === 'secure' ? 'diagnostic_tested' : 'self_practice';
+      // Save session_scores with practicalSummary and infrastructure error tracking
+      const rubricPayload = JSON.stringify({
+        practicalSummary,
+        hasInfrastructureError,
+        gradedAt: now,
+      });
 
-    const upsertSkill = db.prepare(`
-      INSERT INTO candidate_skills (id, candidate_id, skill_id, proficiency, verification_status, source, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, 'diagnostic_assessment', ?, ?)
-      ON CONFLICT(candidate_id, skill_id) DO UPDATE SET
+      db.prepare(`
+        INSERT INTO session_scores (
+          session_id, technical_score, knowledge_score, practical_score,
+          rubric_json, skill_scores, graded_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(session_id) DO UPDATE SET
+          technical_score = excluded.technical_score,
+          knowledge_score = excluded.knowledge_score,
+          practical_score = excluded.practical_score,
+          rubric_json = excluded.rubric_json,
+          skill_scores = excluded.skill_scores,
+          graded_at = excluded.graded_at;
+      `).run(
+        sessionId,
+        technicalScore,
+        knowledgeScore,
+        practicalScore,
+        rubricPayload,
+        JSON.stringify(finalSkillScores),
+        now
+      );
+
+      // Update candidate_skills (One writer rule: Only V2 grading service writes candidate_skills)
+      // Integrity events must NEVER alter technical scores or candidate_skills
+      const passed = technicalScore >= assessmentV2.passThreshold ? 1 : 0;
+
+      const upsertSkill = db.prepare(`
+        INSERT INTO candidate_skills (id, candidate_id, skill_id, proficiency, verification_status, source, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, 'diagnostic_assessment', ?, ?)
+        ON CONFLICT(candidate_id, skill_id) DO UPDATE SET
+
         proficiency = MAX(candidate_skills.proficiency, excluded.proficiency),
         verification_status = CASE
           WHEN candidate_skills.verification_status = 'verified' THEN 'verified'
-          WHEN excluded.verification_status = 'diagnostic_tested' THEN 'diagnostic_tested'
-          ELSE candidate_skills.verification_status
+          WHEN excluded.verification_status = 'diagnostic_tested' AND candidate_skills.verification_status != 'verified' THEN 'diagnostic_tested'
+          WHEN candidate_skills.verification_status = 'diagnostic_tested' THEN 'diagnostic_tested'
+          ELSE excluded.verification_status
         END,
         updated_at = excluded.updated_at;
     `);
 
     for (const item of Object.values(finalSkillScores)) {
-      const skillId = skillStats[item.skillName]?.skillId || `sk-${item.skillName.toLowerCase().replace(/[^a-z0-9]/g, '')}`;
       try {
+        // Record traceable evidence in Skill Evidence Engine
+        // Only record valid demonstration if score > 0
+        if (item.score > 0) {
+          const evResult = SkillEvidenceEngine.recordEvidence({
+            candidateId: userId,
+            skillId: skillStats[item.skillName]?.skillId,
+            skillName: item.skillName,
+            evidenceType: 'assessment',
+            source: session.mode === 'secure' ? 'secure_assessment' : 'practice_assessment',
+            title: `Assessment: ${item.skillName} (${session.mode} mode)`,
+            score: item.score,
+            maxScore: 100,
+            demonstratedLevel: item.level,
+            metadata: {
+              sessionId,
+              category: item.category,
+              knowledgeScore: item.knowledgeScore,
+              practicalScore: item.practicalScore,
+              evidenceCount: item.evidenceCount,
+              provenance: 'diagnostic_assessment',
+            }
+          });
+        }
+
+        const canonicalSkillId = skillStats[item.skillName]?.skillId || `sk-${item.skillName.toLowerCase().replace(/[^a-z0-9]/g, '')}`;
+
+        // Diagnostic testing in secure mode records diagnostic_tested; practice records self_practice or unverified.
+        // Full verification requires satisfying multi-source evidence policy (PRD 6.4)
+        const itemVerificationStatus = session.mode === 'secure'
+          ? 'diagnostic_tested'
+          : (item.score === 0 ? 'unverified' : 'self_practice');
+
         upsertSkill.run(
           `cs-${uuidv4().slice(0, 8)}`,
           userId,
-          skillId,
-          item.level,
-          verificationStatus,
+          canonicalSkillId,
+          item.score === 0 ? 1 : item.level,
+          itemVerificationStatus,
           now,
           now
         );
@@ -358,29 +503,90 @@ export class GradingService {
       }
     }
 
-    // Insert legacy-compatible assessment_attempts (engine_version='v2')
-    const passed = technicalScore >= assessmentV2.passThreshold ? 1 : 0;
-    try {
-      // Find or create default assignment
+    // Persist to authoritative assessment_attempts and assessment_results
+    // 1. Resolve authoritative organisation for candidate assignment
+      let orgId = null;
+      const membership = db.prepare(`
+        SELECT org_id FROM organisation_memberships 
+        WHERE user_id = ? AND status = 'active' 
+        LIMIT 1
+      `).get(userId);
+      if (membership?.org_id) {
+        orgId = membership.org_id;
+      }
+
+      if (!orgId) {
+        const userRow = db.prepare(`SELECT institution_id FROM users WHERE id = ?`).get(userId);
+        if (userRow?.institution_id) {
+          const instOrg = db.prepare(`SELECT id FROM organisations WHERE id = ?`).get(userRow.institution_id);
+          if (instOrg) orgId = instOrg.id;
+        }
+      }
+
+      if (!orgId) {
+        const firstOrg = db.prepare(`SELECT id FROM organisations ORDER BY created_at ASC LIMIT 1`).get();
+        if (firstOrg?.id) {
+          orgId = firstOrg.id;
+        } else {
+          // If no organization exists in clean database, provision platform organization
+          orgId = 'org-platform';
+          db.prepare(`
+            INSERT OR IGNORE INTO organisations (id, name, slug, created_at, updated_at)
+            VALUES (?, 'SARATHI Platform', 'sarathi-platform', ?, ?)
+          `).run(orgId, now, now);
+        }
+      }
+
+      // 2. Resolve or provision valid assessment template for domain
+      let tmpl = db.prepare(`SELECT id FROM assessment_templates WHERE domain_id = ? LIMIT 1`).get(session.domain_id)
+        || db.prepare(`SELECT id FROM assessment_templates LIMIT 1`).get();
+
+      if (!tmpl) {
+        // Ensure parent domain exists in domains table
+        let domainRow = db.prepare(`SELECT id FROM domains WHERE id = ? LIMIT 1`).get(session.domain_id)
+          || db.prepare(`SELECT id FROM domains LIMIT 1`).get();
+        const validDomainId = domainRow ? domainRow.id : (session.domain_id || 'dom-fullstack');
+        if (!domainRow) {
+          db.prepare(`
+            INSERT OR IGNORE INTO domains (id, title, slug, description, active, created_at, updated_at)
+            VALUES (?, ?, ?, 'Core system domain', 1, ?, ?)
+          `).run(validDomainId, session.role || 'Full-Stack Development', validDomainId, now, now);
+        }
+
+        const newTmplId = `at-diag-${session.domain_id || 'general'}`;
+        db.prepare(`
+          INSERT OR IGNORE INTO assessment_templates (
+            id, domain_id, title, description, type, duration_minutes, passing_score, scoring_rubric, assessed_skills, active, created_at, updated_at
+          ) VALUES (?, ?, ?, 'Diagnostic Evaluation', 'diagnostic_quiz_practical', 45, 60.0, '{}', '[]', 1, ?, ?)
+        `).run(newTmplId, validDomainId, `${session.role || 'Career'} Diagnostic Assessment`, now, now);
+        tmpl = { id: newTmplId };
+      }
+
+      // 3. Find or create default assignment with valid org_id
       const existingAssign = db.prepare(`
+        SELECT id FROM assessment_assignments WHERE candidate_id = ? AND template_id = ? LIMIT 1
+      `).get(userId, tmpl.id) || db.prepare(`
         SELECT id FROM assessment_assignments WHERE candidate_id = ? LIMIT 1
       `).get(userId);
 
       const assignmentId = existingAssign?.id || `assign-${sessionId}`;
       if (!existingAssign) {
-        // Ensure template exists
-        const tmpl = db.prepare(`SELECT id FROM assessment_templates LIMIT 1`).get();
-        const tmplId = tmpl?.id || 'tmpl-web-full';
         db.prepare(`
-          INSERT OR IGNORE INTO assessment_assignments (id, template_id, candidate_id, assigned_by, status, created_at, updated_at)
-          VALUES (?, ?, ?, ?, 'completed', ?, ?)
-        `).run(assignmentId, tmplId, userId, userId, now, now);
+          INSERT INTO assessment_assignments (id, org_id, template_id, candidate_id, assigned_by, status, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, 'completed', ?, ?)
+        `).run(assignmentId, orgId, tmpl.id, userId, userId, now, now);
       }
 
+      // 4. Record assessment attempt
       db.prepare(`
-        INSERT INTO assessment_attempts (id, assignment_id, candidate_id, attempt_number, started_at, submitted_at, submission_payload, status, engine_version, created_at, updated_at)
-        VALUES (?, ?, ?, 1, ?, ?, ?, 'graded', 'v2', ?, ?)
-        ON CONFLICT(id) DO UPDATE SET status = 'graded', submitted_at = excluded.submitted_at;
+        INSERT INTO assessment_attempts (
+          id, assignment_id, candidate_id, attempt_number, started_at, submitted_at,
+          submission_payload, status, engine_version, created_at, updated_at
+        ) VALUES (?, ?, ?, 1, ?, ?, ?, 'graded', 'v2', ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          status = 'graded',
+          submitted_at = excluded.submitted_at,
+          updated_at = excluded.updated_at;
       `).run(
         sessionId,
         assignmentId,
@@ -392,23 +598,42 @@ export class GradingService {
         now
       );
 
-      const tmpl = db.prepare(`SELECT id FROM assessment_templates LIMIT 1`).get();
+      // 5. Record authoritative result in assessment_results
+      const rubricScores = {
+        technical: technicalScore,
+        knowledge: knowledgeScore,
+        practical: practicalScore,
+        categoryScores,
+      };
+
       db.prepare(`
-        INSERT INTO assessment_results (id, attempt_id, candidate_id, template_id, score, max_score, passed, graded_at, created_at)
-        VALUES (?, ?, ?, ?, ?, 100.0, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET score = excluded.score, passed = excluded.passed;
+        INSERT INTO assessment_results (
+          id, attempt_id, candidate_id, template_id, score, max_score, passed,
+          rubric_scores, reviewer_feedback, verified_skill_awards, graded_by, graded_at, created_at
+        ) VALUES (?, ?, ?, ?, ?, 100.0, ?, ?, ?, '[]', ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          score = excluded.score,
+          passed = excluded.passed,
+          rubric_scores = excluded.rubric_scores,
+          graded_at = excluded.graded_at;
       `).run(
         `res-${sessionId}`,
         sessionId,
         userId,
-        tmpl?.id || 'tmpl-web-full',
+        tmpl.id,
         technicalScore,
         passed,
+        JSON.stringify(rubricScores),
+        passed ? 'Diagnostic benchmark proficiency met.' : 'Diagnostic benchmark target not met; foundational review recommended.',
+        null,
         now,
         now
       );
+      db.exec('COMMIT;');
     } catch (err) {
-      console.warn('[GradingService] Legacy attempt sync note:', err.message);
+      try { db.exec('ROLLBACK;'); } catch {}
+      console.error('[GradingService] Assessment persistence error:', err);
+      throw new Error(`Assessment result persistence failed: ${err.message}`);
     }
 
     return this.getSessionResult(sessionId, userId);
@@ -419,13 +644,28 @@ export class GradingService {
    */
   static getSessionResult(sessionId, userId) {
     const db = initDb();
-    const session = db.prepare(`SELECT * FROM assessment_sessions WHERE id = ?`).get(sessionId);
+    let session = db.prepare(`SELECT * FROM assessment_sessions WHERE id = ?`).get(sessionId);
 
-    if (!session || session.user_id !== userId) {
-      const err = new Error('Session not found or unauthorized.');
+    if (!session) {
+      // Check assessment_attempts in case an attemptId was passed
+      const attempt = db.prepare(`SELECT * FROM assessment_attempts WHERE id = ?`).get(sessionId);
+      if (attempt) {
+        session = db.prepare(`SELECT * FROM assessment_sessions WHERE id = ?`).get(attempt.id);
+      }
+    }
+
+    if (!session) {
+      const err = new Error('Assessment session or attempt not found.');
+      err.code = 'NOT_FOUND';
+      throw err;
+    }
+
+    if (session.user_id !== userId) {
+      const err = new Error('Unauthorized to access this assessment session.');
       err.code = 'FORBIDDEN';
       throw err;
     }
+
 
     const scoresRow = db.prepare(`SELECT * FROM session_scores WHERE session_id = ?`).get(sessionId);
 
@@ -488,21 +728,31 @@ export class GradingService {
     const integrityEvents = db.prepare(`SELECT type, ts FROM integrity_events WHERE session_id = ?`).all(sessionId);
     const nonNetworkEvents = integrityEvents.filter(e => !e.type.startsWith('network_'));
 
+    let practicalSummary = [];
+    let hasInfrastructureError = false;
+    try {
+      const parsedRubric = JSON.parse(scoresRow?.rubric_json || '{}');
+      practicalSummary = parsedRubric.practicalSummary || [];
+      hasInfrastructureError = Boolean(parsedRubric.hasInfrastructureError);
+    } catch {}
+
     return {
       sessionId: session.id,
       mode: session.mode,
       domainId: session.domain_id,
       role: session.role,
+      overallScore: scoresRow?.technical_score ?? 0,
       technicalScore: scoresRow?.technical_score ?? 0,
       knowledgeScore: scoresRow?.knowledge_score ?? 0,
       practicalScore: scoresRow?.practical_score ?? 0,
       completedAt: session.submitted_at || session.started_at,
+      hasInfrastructureError,
       skillScores,
       categoryScores,
       strengths,
       improvements,
       answersSummary,
-      practicalSummary: [],
+      practicalSummary,
       integritySummary: {
         eventCount: nonNetworkEvents.length,
         longestAwaySec: 0,

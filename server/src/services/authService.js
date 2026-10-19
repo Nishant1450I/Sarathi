@@ -19,15 +19,17 @@ export const authService = {
       email: user.email,
       name: user.full_name,
       globalRole: user.role,
+      status: user.status || 'active',
+      institutionId: user.institution_id || null,
       orgId: orgId || null,
       orgRole: role || null,
     };
-    return jwt.sign(payload, authConfig.secret, { expiresIn: authConfig.expiresIn });
+    return jwt.sign(payload, authConfig.secret, { algorithm: 'HS256', expiresIn: authConfig.expiresIn });
   },
 
   verifyToken(token) {
     try {
-      return jwt.verify(token, authConfig.secret);
+      return jwt.verify(token, authConfig.secret, { algorithms: ['HS256'] });
     } catch {
       return null;
     }
@@ -63,6 +65,18 @@ export const authService = {
 
     if (!user) {
       throw new Error('Invalid email or password');
+    }
+
+    if (user.status === 'suspended') {
+      const err = new Error('Your account has been suspended. Please contact platform administration.');
+      err.code = 'ACCOUNT_SUSPENDED';
+      throw err;
+    }
+
+    if (user.status === 'pending_approval') {
+      const err = new Error('Your account is awaiting administrative approval.');
+      err.code = 'PENDING_APPROVAL';
+      throw err;
     }
 
     if (!user.password_hash) {
@@ -114,8 +128,10 @@ export const authService = {
         email: user.email,
         fullName: user.full_name,
         role: user.role,
+        status: user.status || 'active',
         companyName: user.company_name,
         institution: user.institution,
+        institutionId: user.institution_id || null,
         avatarUrl: user.avatar_url,
       },
       organization: membership ? {

@@ -1,5 +1,5 @@
 import { spawn, execFile } from 'node:child_process';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { assessmentV2 } from '../../config/index.js';
@@ -12,21 +12,42 @@ let pythonChecked = false;
  * Returns path/command string or null if unavailable.
  */
 export async function detectPythonExecutable() {
-  if (pythonChecked) {
+  if (pythonChecked && cachedPythonPath) {
     return cachedPythonPath;
   }
 
+  const localAppData = process.env.LOCALAPPDATA || '';
+  const programFiles = process.env.ProgramFiles || 'C:\\Program Files';
+  const programFilesX86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
+
   const candidates = [
     process.env.PYTHON_PATH,
+    // Standard Windows installation paths
+    join(localAppData, 'Programs', 'Python', 'Python312', 'python.exe'),
+    join(localAppData, 'Programs', 'Python', 'Python311', 'python.exe'),
+    join(localAppData, 'Programs', 'Python', 'Python310', 'python.exe'),
+    join(programFiles, 'Python312', 'python.exe'),
+    join(programFiles, 'Python311', 'python.exe'),
+    join(programFiles, 'Python310', 'python.exe'),
+    join(programFilesX86, 'Python312', 'python.exe'),
+    // Standard Unix / macOS paths
+    '/usr/bin/python3',
+    '/usr/local/bin/python3',
+    '/opt/homebrew/bin/python3',
+    // System PATH binaries
     'python3',
     'python',
     'py',
   ].filter(Boolean);
 
   for (const cmd of candidates) {
+    if ((cmd.includes('\\') || cmd.includes('/')) && !existsSync(cmd)) {
+      continue;
+    }
+
     const isWorking = await new Promise((resolve) => {
       try {
-        const proc = execFile(cmd, ['--version'], { timeout: 2000 }, (error, stdout, stderr) => {
+        const proc = execFile(cmd, ['-c', 'import sys; print(f"Python {sys.version_info.major}.{sys.version_info.minor}")'], { timeout: 3000 }, (error, stdout, stderr) => {
           if (error) {
             return resolve(false);
           }
@@ -36,7 +57,7 @@ export async function detectPythonExecutable() {
             return resolve(false);
           }
           // Verify Python 3
-          if (output.toLowerCase().includes('python 3') || output.toLowerCase().includes('python 2')) {
+          if (output.startsWith('Python 3') || output.toLowerCase().includes('python 3')) {
             return resolve(true);
           }
           resolve(false);
@@ -74,22 +95,24 @@ export class PythonDriver {
       return {
         status: 'runtime_unavailable',
         passed: 0,
-        failed: tests.length,
+        failed: 0,
+        unexecuted: tests.length,
         total: tests.length,
         timedOut: false,
         stdout: '',
-        stderr: 'Python runtime is not installed or configured on the host system. Please configure Python 3 or connect an isolated worker.',
+        stderr: 'Infrastructure Error: Python 3 runtime is not configured or available on the execution server. Please install Python 3.10+ or connect an isolated worker.',
         timeMs: Date.now() - startTime,
         results: tests.map(t => ({
           id: t.id,
           kind: t.kind,
+          status: 'not_executed',
           passed: false,
           actual: '',
-          expected: t.expectedOutput,
+          expected: t.kind === 'visible' ? (t.expectedOutput ?? t.expected_output) : undefined,
           executionTimeMs: 0,
-          error: 'Python runtime unavailable on server.',
+          error: 'Infrastructure Error: Python runtime unavailable on server.',
         })),
-        isolationNotice: 'Execution halted: Host Python runtime unavailable.',
+        isolationNotice: 'Execution halted: Host Python runtime unavailable. Test marked as NOT EXECUTED.',
       };
     }
 
@@ -105,12 +128,13 @@ export class PythonDriver {
       let timedOutAny = false;
 
       for (const t of tests) {
+        const expected = t.expectedOutput ?? t.expected_output;
         const testRes = await this.runSingleTest({
           pythonCmd,
           tempDir,
           testInput: t.input,
-          expectedOutput: t.expectedOutput,
-          timeoutMs: t.timeoutMs || timeoutMs,
+          expectedOutput: expected,
+          timeoutMs: t.timeoutMs || t.timeout_ms || timeoutMs,
         });
 
         if (testRes.timedOut) {
@@ -122,7 +146,8 @@ export class PythonDriver {
           kind: t.kind,
           passed: testRes.passed,
           actual: testRes.actual,
-          expected: t.expectedOutput,
+          // Hide expectedOutput for hidden tests from client leakage
+          expected: t.kind === 'visible' ? expected : undefined,
           executionTimeMs: testRes.timeMs,
           error: testRes.error,
         });
@@ -161,19 +186,35 @@ export class PythonDriver {
       let stderr = '';
       let timedOut = false;
 
+      const safeEnv = {
+        PATH: process.env.PATH,
+        SYSTEMROOT: process.env.SYSTEMROOT || process.env.SystemRoot,
+        WINDIR: process.env.WINDIR || process.env.windir,
+        COMSPEC: process.env.COMSPEC || process.env.ComSpec,
+        PATHEXT: process.env.PATHEXT,
+        PYTHONPATH: tempDir,
+        PYTHONDONTWRITEBYTECODE: '1',
+        PYTHONUNBUFFERED: '1',
+        PYTHONNOUSERSITE: '1',
+        PYTHONHASHSEED: '0',
+        TEMP: tempDir,
+        TMP: tempDir,
+      };
+
       const proc = spawn(pythonCmd, [scriptPath], {
         cwd: tempDir,
-        env: {
-          PATH: process.env.PATH,
-          PYTHONPATH: tempDir,
-          PYTHONDONTWRITEBYTECODE: '1',
-          PYTHONUNBUFFERED: '1',
-        },
+        env: safeEnv,
       });
 
       const timer = setTimeout(() => {
         timedOut = true;
-        try { proc.kill('SIGKILL'); } catch {}
+        try {
+          if (process.platform === 'win32' && proc.pid) {
+            execFile('taskkill', ['/pid', String(proc.pid), '/f', '/t'], () => {});
+          } else {
+            proc.kill('SIGKILL');
+          }
+        } catch {}
       }, timeoutMs);
 
       proc.stdout.on('data', (d) => {

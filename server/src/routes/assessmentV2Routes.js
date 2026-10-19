@@ -57,6 +57,10 @@ router.post('/sessions', requireAuth, (req, res, next) => {
       ...parsed.data,
     });
 
+    if (session.isResumed) {
+      return res.status(200).json({ resumed: true, session, ...session });
+    }
+
     res.status(201).json(session);
   } catch (err) {
     if (err.message?.includes('Consent is required')) {
@@ -67,6 +71,123 @@ router.post('/sessions', requireAuth, (req, res, next) => {
     next(err);
   }
 });
+
+/**
+ * GET /api/assessments/v2/sessions/active
+ * Retrieve active in-progress assessment session for the authenticated student
+ */
+router.get('/sessions/active', requireAuth, (req, res, next) => {
+  try {
+    const session = SessionService.getActiveSession(req.user.id, req.query.domainId);
+    if (!session) {
+      return res.status(404).json({ active: false, session: null });
+    }
+    res.json({ active: true, session });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/assessments/v2/sessions/:id/abandon
+ * Explicitly abandon an in-progress session
+ */
+router.post('/sessions/:id/abandon', requireAuth, (req, res, next) => {
+  try {
+    const result = SessionService.abandonSession(req.params.id, req.user.id);
+    res.json(result);
+  } catch (err) {
+    if (err.code === 'NOT_FOUND') {
+      return res.status(404).json({ error: { code: 'NOT_FOUND', message: err.message } });
+    }
+    if (err.code === 'FORBIDDEN') {
+      return res.status(403).json({ error: { code: 'FORBIDDEN', message: err.message } });
+    }
+    next(err);
+  }
+});
+
+/**
+ * GET /api/assessments/v2/sessions/latest-result
+ * Retrieve latest completed assessment result for the authenticated student
+ */
+router.get('/sessions/latest-result', requireAuth, (req, res, next) => {
+  try {
+    const db = initDb();
+    let query = `
+      SELECT s.id
+      FROM assessment_sessions s
+      JOIN session_scores sc ON s.id = sc.session_id
+      WHERE s.user_id = ? AND s.status IN ('graded', 'submitted', 'completed')
+    `;
+    const params = [req.user.id];
+
+    if (req.query.domainId) {
+      query += ` AND s.domain_id = ?`;
+      params.push(req.query.domainId);
+    }
+
+    query += ` ORDER BY s.submitted_at DESC, s.started_at DESC LIMIT 1`;
+
+    const row = db.prepare(query).get(...params);
+
+    if (!row) {
+      return res.status(404).json({ success: false, result: null, message: 'No completed assessment found.' });
+    }
+
+    const result = GradingService.getSessionResult(row.id, req.user.id);
+    res.json({ success: true, result });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /api/assessments/v2/sessions/history
+ * Retrieve completed assessment attempts history for authenticated student
+ */
+const historyHandler = (req, res, next) => {
+  try {
+    const db = initDb();
+    let query = `
+      SELECT s.id, s.mode, s.domain_id, s.role, s.status, s.submitted_at, s.started_at,
+             sc.technical_score, sc.knowledge_score, sc.practical_score
+      FROM assessment_sessions s
+      LEFT JOIN session_scores sc ON s.id = sc.session_id
+      WHERE s.user_id = ?
+    `;
+    const params = [req.user.id];
+
+    if (req.query.domainId) {
+      query += ` AND s.domain_id = ?`;
+      params.push(req.query.domainId);
+    }
+
+    query += ` ORDER BY COALESCE(s.submitted_at, s.started_at) DESC, s.started_at DESC`;
+
+    const rows = db.prepare(query).all(...params);
+    const history = rows.map(r => ({
+      sessionId: r.id,
+      id: r.id,
+      mode: r.mode,
+      domainId: r.domain_id,
+      role: r.role,
+      status: r.status,
+      overallScore: r.technical_score ?? 0,
+      technicalScore: r.technical_score ?? 0,
+      knowledgeScore: r.knowledge_score ?? 0,
+      practicalScore: r.practical_score ?? 0,
+      completedAt: r.submitted_at || r.started_at,
+    }));
+
+    res.json({ success: true, history, data: history });
+  } catch (err) {
+    next(err);
+  }
+};
+
+router.get('/sessions/history', requireAuth, historyHandler);
+router.get('/history', requireAuth, historyHandler);
 
 /**
  * GET /api/assessments/v2/sessions/:id
@@ -277,7 +398,7 @@ router.post('/sessions/:id/run', requireAuth, async (req, res, next) => {
  * POST /api/assessments/v2/sessions/:id/submit
  * Server grades session, records attempts and candidate_skills
  */
-router.post('/sessions/:id/submit', requireAuth, (req, res, next) => {
+router.post('/sessions/:id/submit', requireAuth, async (req, res, next) => {
   try {
     const parsed = submitSessionSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -289,9 +410,12 @@ router.post('/sessions/:id/submit', requireAuth, (req, res, next) => {
       });
     }
 
-    const result = GradingService.gradeSession(req.params.id, req.user.id, parsed.data);
+    const result = await GradingService.gradeSession(req.params.id, req.user.id, parsed.data);
     res.json(result);
   } catch (err) {
+    if (err.code === 'INVALID_STATE') {
+      return res.status(400).json({ error: { code: 'INVALID_STATE', message: err.message } });
+    }
     if (err.code === 'FORBIDDEN') {
       return res.status(403).json({ error: { code: 'FORBIDDEN', message: err.message } });
     }
@@ -301,15 +425,19 @@ router.post('/sessions/:id/submit', requireAuth, (req, res, next) => {
 
 /**
  * GET /api/assessments/v2/sessions/:id/result
+ * GET /api/assessments/v2/attempts/:id/result
  * Retrieve completed assessment result
  */
-router.get('/sessions/:id/result', requireAuth, (req, res, next) => {
+router.get(['/sessions/:id/result', '/attempts/:id/result'], requireAuth, (req, res, next) => {
   try {
     const result = GradingService.getSessionResult(req.params.id, req.user.id);
     res.json(result);
   } catch (err) {
     if (err.code === 'FORBIDDEN') {
       return res.status(403).json({ error: { code: 'FORBIDDEN', message: err.message } });
+    }
+    if (err.code === 'NOT_FOUND') {
+      return res.status(404).json({ error: { code: 'NOT_FOUND', message: err.message } });
     }
     next(err);
   }
@@ -322,14 +450,22 @@ router.get('/sessions/:id/result', requireAuth, (req, res, next) => {
 router.get('/history', requireAuth, (req, res, next) => {
   try {
     const db = initDb();
-    const rows = db.prepare(`
+    let query = `
       SELECT s.id as session_id, s.mode, s.domain_id, s.role, s.status, s.started_at, s.submitted_at, s.engine_version,
              sc.technical_score, sc.knowledge_score, sc.practical_score, sc.skill_scores
       FROM assessment_sessions s
       LEFT JOIN session_scores sc ON s.id = sc.session_id
       WHERE s.user_id = ?
-      ORDER BY s.started_at DESC
-    `).all(req.user.id);
+    `;
+    const params = [req.user.id];
+
+    if (req.query.domainId) {
+      query += ` AND s.domain_id = ?`;
+      params.push(req.query.domainId);
+    }
+
+    query += ` ORDER BY s.started_at DESC`;
+    const rows = db.prepare(query).all(...params);
 
     const formatted = rows.map(r => {
       let skillScores = {};

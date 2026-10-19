@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   TrendingUp,
   AlertTriangle,
@@ -34,18 +34,65 @@ import { ProgressBar } from '../../components/common/ProgressBar';
 import { PageHeader } from '../../components/common/PageHeader';
 import { mockCollegeAnalyticsData } from '../../data/mockRecruiterCollege';
 import { useAuth } from '../../context/AuthContext';
+import { apiClient } from '../../services/apiClient';
 
 export const CollegeDashboard: React.FC = () => {
-  const { user } = useAuth();
+  const { user, isDemo, appMode } = useAuth();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedDeptFilter, setSelectedDeptFilter] = useState<string>('all');
-  const data = mockCollegeAnalyticsData;
-  const institutionName = user?.institution || data.institutionName;
+  const [apiAnalytics, setApiAnalytics] = useState<any>(null);
+  const [isLoadingApi, setIsLoadingApi] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
 
-  const handleRefresh = () => {
-    setIsRefreshing(true);
-    setTimeout(() => setIsRefreshing(false), 800);
+  const fetchCollegeAnalytics = async () => {
+    // In demo mode without explicit backend institution, mock data can be used
+    if (isDemo && appMode === 'demo' && !user?.institutionId && !user?.institution) {
+      return;
+    }
+
+    setIsLoadingApi(true);
+    setApiError(null);
+    try {
+      const res = await apiClient.get('/api/analytics/college');
+      if (res?.success && res.data) {
+        setApiAnalytics(res.data);
+      }
+    } catch (err: any) {
+      // In demo mode fallback gracefully
+      if (appMode === 'demo') {
+        console.warn('College analytics API fallback to demo mock data:', err.message);
+      } else {
+        setApiError(err.message || 'Failed to load institutional analytics.');
+      }
+    } finally {
+      setIsLoadingApi(false);
+    }
   };
+
+  useEffect(() => {
+    fetchCollegeAnalytics();
+  }, [user, isDemo, appMode]);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await fetchCollegeAnalytics();
+    setIsRefreshing(false);
+  };
+
+  const isRealData = Boolean(apiAnalytics);
+  const cohortNotice = isRealData && !apiAnalytics.minCohortMet ? apiAnalytics.notice : null;
+
+  const data = {
+    totalStudentsEnrolled: isRealData ? apiAnalytics.kpis.totalStudents : mockCollegeAnalyticsData.totalStudentsEnrolled,
+    assessmentsCompleted: isRealData ? apiAnalytics.kpis.assessedStudentsCount : mockCollegeAnalyticsData.assessmentsCompleted,
+    avgReadinessScore: isRealData ? apiAnalytics.kpis.avgReadinessScore : mockCollegeAnalyticsData.avgReadinessScore,
+    roadmapCompletionRate: isRealData ? (apiAnalytics.kpis.assessmentRate || 0) : mockCollegeAnalyticsData.roadmapCompletionRate,
+    commonSkillGaps: mockCollegeAnalyticsData.commonSkillGaps,
+    topSkillsAssessed: mockCollegeAnalyticsData.topSkillsAssessed,
+    readinessTrends: isRealData && apiAnalytics.readinessTrend?.length > 0 ? apiAnalytics.readinessTrend : mockCollegeAnalyticsData.readinessTrends,
+  };
+
+  const institutionName = user?.institution || apiAnalytics?.institutionName || mockCollegeAnalyticsData.institutionName;
 
   // Department / Cohort performance breakdown data
   const departmentsData = [
@@ -215,8 +262,8 @@ export const CollegeDashboard: React.FC = () => {
             <Button
               variant="primary"
               size="sm"
-              isLoading={isRefreshing}
-              leftIcon={<RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />}
+              isLoading={isRefreshing || isLoadingApi}
+              leftIcon={<RefreshCw className={`w-4 h-4 ${isRefreshing || isLoadingApi ? 'animate-spin' : ''}`} />}
               onClick={handleRefresh}
             >
               Sync Analytics
@@ -224,6 +271,28 @@ export const CollegeDashboard: React.FC = () => {
           </div>
         }
       />
+
+      {/* Cohort Privacy Notice (D-09) */}
+      {cohortNotice && (
+        <div role="status" className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-sm flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <span className="font-bold block">Privacy Protection Active: Minimum Cohort Threshold</span>
+            <p className="text-xs text-amber-800 mt-0.5">{cohortNotice}</p>
+          </div>
+        </div>
+      )}
+
+      {/* API Error Notification */}
+      {apiError && (
+        <div role="alert" className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-900 text-sm flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+          <div>
+            <span className="font-bold block">Failed to Sync Institutional Data</span>
+            <p className="text-xs text-red-800 mt-0.5">{apiError}</p>
+          </div>
+        </div>
+      )}
 
       {/* 2. 4 INSTITUTIONAL STATS CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
@@ -599,7 +668,7 @@ export const CollegeDashboard: React.FC = () => {
                     formatter={(val: any) => [`${val}% Benchmark Score`, 'Batch Average']}
                   />
                   <Bar dataKey="avgScore" radius={[6, 6, 0, 0]} maxBarSize={45}>
-                    {data.topSkillsAssessed.map((_, index) => (
+                    {data.topSkillsAssessed.map((_item: any, index: number) => (
                       <Cell key={`cell-${index}`} fill={index % 2 === 0 ? '#087BFA' : '#603DF5'} />
                     ))}
                   </Bar>

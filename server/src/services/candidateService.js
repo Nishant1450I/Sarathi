@@ -1,6 +1,7 @@
 import { randomUUID as uuidv4 } from 'node:crypto';
 import { repository } from '../data/repository.js';
 import { matchingService } from './matchingService.js';
+import { SkillEvidenceEngine } from './skillEvidenceEngine.js';
 
 export const candidateService = {
   /**
@@ -166,8 +167,8 @@ export const candidateService = {
               u_ver.full_name as verified_by_name,
               (SELECT COUNT(*) FROM skill_evidence se WHERE se.candidate_id = cs.candidate_id AND se.skill_id = cs.skill_id) as evidence_count
        FROM candidate_skills cs
-       JOIN skills s ON s.id = cs.skill_id
-       JOIN domains d ON d.id = s.domain_id
+       LEFT JOIN skills s ON s.id = cs.skill_id
+       LEFT JOIN domains d ON d.id = s.domain_id
        LEFT JOIN users u_ver ON u_ver.id = cs.verified_by
        WHERE cs.candidate_id = ?
        ORDER BY cs.verification_status = 'verified' DESC, cs.proficiency DESC;`,
@@ -206,12 +207,16 @@ export const candidateService = {
 
     // Fetch assessment history
     const assessments = repository.query(
-      `SELECT ar.*, at.title as template_title, at.type as assessment_type,
-              at.duration_minutes, at.passing_score, d.title as domain_title,
-              u_grad.full_name as grader_name
+      `SELECT ar.*, 
+              COALESCE(at.title, 'Diagnostic Assessment') as template_title, 
+              COALESCE(at.type, 'diagnostic_quiz_practical') as assessment_type,
+              COALESCE(at.duration_minutes, 45) as duration_minutes, 
+              COALESCE(at.passing_score, 60.0) as passing_score, 
+              COALESCE(d.title, at.title, 'Technology') as domain_title,
+              COALESCE(u_grad.full_name, 'System Evaluation') as grader_name
        FROM assessment_results ar
-       JOIN assessment_templates at ON at.id = ar.template_id
-       JOIN domains d ON d.id = at.domain_id
+       LEFT JOIN assessment_templates at ON at.id = ar.template_id
+       LEFT JOIN domains d ON d.id = at.domain_id
        LEFT JOIN users u_grad ON u_grad.id = ar.graded_by
        WHERE ar.candidate_id = ?
        ORDER BY ar.created_at DESC;`,
@@ -380,13 +385,41 @@ export const candidateService = {
         );
       }
 
-      return {
+      const res = {
         success: true,
         createdCount,
         updatedCount,
         evidenceIds,
         message: `Submitted ${skillsToProcess.length} skill evidence item(s) for verification.`
       };
+
+      // Also record traceable evidence in central Skill Evidence Engine
+      for (const skillName of skillsToProcess) {
+        if (!skillName || !skillName.trim()) continue;
+        try {
+          SkillEvidenceEngine.recordEvidence({
+            candidateId,
+            skillName: skillName.trim(),
+            evidenceType: 'github_repo',
+            source: 'project_submission',
+            title: `Project: ${title.trim()}`,
+            referenceUrl: cleanRepoUrl,
+            score: 80,
+            maxScore: 100,
+            demonstratedLevel: 2,
+            metadata: {
+              description: description.trim(),
+              liveDemoUrl: liveDemoUrl ? liveDemoUrl.trim() : null,
+              technologies: Array.isArray(technologies) ? technologies : [],
+              domainId: domainId || null
+            }
+          });
+        } catch (err) {
+          console.warn('SkillEvidenceEngine sync note:', err?.message);
+        }
+      }
+
+      return res;
     });
   },
 
@@ -519,6 +552,163 @@ export const candidateService = {
       );
 
       return this.getCandidateProfile(candidateId);
+    });
+  },
+
+  /**
+   * Submits candidate project evidence, inserts into skill_evidence,
+   * updates candidate_skills, and records in SkillEvidenceEngine.
+   */
+  submitCandidateEvidence({
+    candidateId,
+    title,
+    description,
+    repositoryUrl,
+    liveDemoUrl,
+    skillsDemonstrated = [],
+    technologies = [],
+    domainId = 'dom-fullstack'
+  }) {
+    if (!candidateId) throw new Error('candidateId is required');
+    if (!title || !title.trim()) throw new Error('Project title is required');
+    if (!repositoryUrl || !repositoryUrl.trim()) throw new Error('repositoryUrl is required');
+    if (!repositoryUrl.startsWith('http://') && !repositoryUrl.startsWith('https://')) {
+      throw new Error('repositoryUrl must start with http:// or https://');
+    }
+
+    return repository.transaction((repo) => {
+      const now = new Date().toISOString();
+      const targetSkills = Array.isArray(skillsDemonstrated) && skillsDemonstrated.length > 0
+        ? skillsDemonstrated
+        : (Array.isArray(technologies) && technologies.length > 0 ? technologies : ['Full-Stack Development']);
+
+      const combinedSkills = Array.from(new Set(targetSkills.map(s => typeof s === 'string' ? s.trim() : '').filter(Boolean)));
+
+      let createdCount = 0;
+      let updatedCount = 0;
+      const evidenceIds = [];
+
+      for (const skillName of combinedSkills) {
+        // Resolve or insert canonical skill
+        let skill = repo.queryOne('SELECT id, name FROM skills WHERE LOWER(name) = LOWER(?);', [skillName]);
+        if (!skill) {
+          const newSkillId = `sk-${uuidv4().slice(0, 8)}`;
+          const dom = repo.queryOne('SELECT id FROM domains WHERE id = ?;', [domainId])
+            || repo.queryOne('SELECT id FROM domains LIMIT 1;');
+          const validDomainId = dom ? dom.id : 'dom-fullstack';
+
+          repo.execute(`
+            INSERT INTO skills (id, domain_id, name, description, category, proficiency_scale, accepted_evidence_types, assessment_types, active, created_at, updated_at)
+            VALUES (?, ?, ?, ?, 'General', '1-5', '["github_pr","project_repo","assessment_score","practical_coding"]', '["practical_coding"]', 1, ?, ?)
+          `, [newSkillId, validDomainId, skillName, `${skillName} competency`, now, now]);
+
+          skill = { id: newSkillId, name: skillName };
+        }
+
+        const metadataJson = JSON.stringify({
+          description: description || '',
+          liveDemoUrl: liveDemoUrl || null,
+          technologies,
+          skillsDemonstrated,
+          submittedAt: now
+        });
+
+        const existingEvidence = repo.queryOne(
+          'SELECT id FROM skill_evidence WHERE candidate_id = ? AND skill_id = ? AND reference_url = ?;',
+          [candidateId, skill.id, repositoryUrl.trim()]
+        );
+
+        let evidenceId;
+        if (existingEvidence) {
+          evidenceId = existingEvidence.id;
+          repo.execute(`
+            UPDATE skill_evidence
+            SET title = ?, metadata = ?, updated_at = ?
+            WHERE id = ?;
+          `, [title.trim(), metadataJson, now, evidenceId]);
+          updatedCount++;
+        } else {
+          evidenceId = `ev-${uuidv4().slice(0, 8)}`;
+          repo.execute(`
+            INSERT INTO skill_evidence (
+              id, candidate_id, skill_id, evidence_type, title, reference_url,
+              metadata, source, verification_status, created_at, updated_at
+            ) VALUES (?, ?, ?, 'project_repo', ?, ?, ?, 'github_import', 'pending_review', ?, ?)
+          `, [
+            evidenceId,
+            candidateId,
+            skill.id,
+            title.trim(),
+            repositoryUrl.trim(),
+            metadataJson,
+            now,
+            now
+          ]);
+          createdCount++;
+        }
+        evidenceIds.push(evidenceId);
+
+        // Record in SkillEvidenceEngine
+        SkillEvidenceEngine.recordEvidence({
+          candidateId,
+          skillId: skill.id,
+          skillName: skill.name,
+          evidenceType: 'project_repo',
+          source: 'github_repository',
+          title: `Project Evidence: ${title.trim()}`,
+          referenceUrl: repositoryUrl.trim(),
+          score: 80,
+          maxScore: 100,
+          demonstratedLevel: 3,
+          metadata: {
+            evidenceId,
+            liveDemoUrl,
+            technologies,
+            skillsDemonstrated,
+            submittedAt: now
+          }
+        });
+
+        // Update candidate_skills
+        repo.execute(`
+          INSERT INTO candidate_skills (
+            id, candidate_id, skill_id, proficiency, verification_status, source, created_at, updated_at
+          ) VALUES (?, ?, ?, 3, 'evidence_submitted', 'project_evidence', ?, ?)
+          ON CONFLICT(candidate_id, skill_id) DO UPDATE SET
+            proficiency = MAX(candidate_skills.proficiency, excluded.proficiency),
+            verification_status = CASE
+              WHEN candidate_skills.verification_status IN ('verified', 'diagnostic_tested') THEN candidate_skills.verification_status
+              ELSE 'evidence_submitted'
+            END,
+            updated_at = excluded.updated_at
+        `, [
+          `cs-${uuidv4().slice(0, 8)}`,
+          candidateId,
+          skill.id,
+          now,
+          now
+        ]);
+      }
+
+      // Update candidate's repo_count in candidate_profiles
+      repo.execute(`
+        UPDATE candidate_profiles
+        SET repo_count = (
+          SELECT COUNT(DISTINCT reference_url)
+          FROM skill_evidence
+          WHERE candidate_id = ?
+        ),
+        updated_at = ?
+        WHERE id = ?;
+      `, [candidateId, now, candidateId]);
+
+      return {
+        success: true,
+        createdCount,
+        updatedCount,
+        evidenceIds,
+        message: `Successfully processed project evidence across ${combinedSkills.length} competencies (${createdCount} new, ${updatedCount} updated).`
+      };
     });
   }
 };

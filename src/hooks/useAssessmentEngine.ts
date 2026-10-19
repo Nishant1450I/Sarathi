@@ -11,14 +11,15 @@ interface UseAssessmentEngineOptions {
   onSubmitted?: (result: V2SessionResult) => void;
 }
 
-function initCodeMap(questions: V2QuestionClient[], sessionId: string) {
+function initCodeMap(questions: V2QuestionClient[], sessionId: string, initialSnapshots?: Record<string, any>) {
   const map: Record<string, { code: string; language: string }> = {};
   for (const q of questions) {
     if (q.type === 'code' || q.type === 'sql') {
       let saved: string | null = null;
       try { saved = sessionStorage.getItem(`sarathi_v2_${sessionId}_code_${q.id}`); } catch {}
+      const snapshotCode = initialSnapshots?.[q.id]?.code;
       map[q.id] = {
-        code: saved !== null ? saved : (q.starterCode || ''),
+        code: saved !== null ? saved : (snapshotCode !== undefined ? snapshotCode : (q.starterCode || '')),
         language: q.language || (q.type === 'sql' ? 'sql' : 'javascript'),
       };
     }
@@ -28,15 +29,35 @@ function initCodeMap(questions: V2QuestionClient[], sessionId: string) {
 
 export function useAssessmentEngine({ initialSession, user, onSubmitted }: UseAssessmentEngineOptions) {
   const [session, setSession] = useState<AssessmentSessionClient>(initialSession);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, any>>(() => {
+  const [currentIndex, setCurrentIndex] = useState(() => {
     try {
-      const s = sessionStorage.getItem(`sarathi_v2_${initialSession.sessionId}_answers`);
-      return s ? JSON.parse(s) : {};
-    } catch { return {}; }
+      const saved = sessionStorage.getItem(`sarathi_v2_${initialSession.sessionId}_current_index`);
+      if (saved !== null) {
+        const parsed = parseInt(saved, 10);
+        if (!isNaN(parsed) && parsed >= 0 && parsed < initialSession.questions.length) {
+          return parsed;
+        }
+      }
+    } catch {}
+    return 0;
   });
 
-  const [codeMap, setCodeMap] = useState(() => initCodeMap(initialSession.questions, initialSession.sessionId));
+  const [answers, setAnswers] = useState<Record<string, any>>(() => {
+    let localDraft: Record<string, any> = {};
+    try {
+      const s = sessionStorage.getItem(`sarathi_v2_${initialSession.sessionId}_answers`);
+      if (s) localDraft = JSON.parse(s);
+    } catch {}
+    // Merge server draftAnswers with local sessionStorage, prioritizing local
+    return {
+      ...(initialSession.draftAnswers || {}),
+      ...localDraft,
+    };
+  });
+
+  const [codeMap, setCodeMap] = useState(() =>
+    initCodeMap(initialSession.questions, initialSession.sessionId, initialSession.snapshots)
+  );
   const [testResults, setTestResults] = useState<Record<string, any>>({});
   const [isRunningCode, setIsRunningCode] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -63,6 +84,11 @@ export function useAssessmentEngine({ initialSession, user, onSubmitted }: UseAs
       const graded = await AssessmentV2Service.submitSession(session.sessionId, { answers, tasks: tasksPayload }, user);
       setResult(graded);
       setSession(prev => ({ ...prev, status: 'graded' }));
+      try {
+        sessionStorage.removeItem('sarathi_v2_active_session_id');
+        sessionStorage.removeItem('sarathi_v2_active_mode');
+        sessionStorage.removeItem(`sarathi_v2_${session.sessionId}_current_index`);
+      } catch {}
       onSubmitted?.(graded);
     } catch (err: any) {
       setError(err.message || 'Failed to submit assessment.');
@@ -121,8 +147,13 @@ export function useAssessmentEngine({ initialSession, user, onSubmitted }: UseAs
   }, [activeQuestion, codeMap, session.sessionId, user]);
 
   const goToQuestion = useCallback((idx: number) => {
-    if (idx >= 0 && idx < session.questions.length) setCurrentIndex(idx);
-  }, [session.questions.length]);
+    if (idx >= 0 && idx < session.questions.length) {
+      setCurrentIndex(idx);
+      try {
+        sessionStorage.setItem(`sarathi_v2_${session.sessionId}_current_index`, String(idx));
+      } catch {}
+    }
+  }, [session.questions.length, session.sessionId]);
 
   return {
     session,

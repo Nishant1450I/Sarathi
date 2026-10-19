@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { AssessmentV2Service } from '../services/assessmentV2Service';
 import type { UserProfile } from '../types/user';
 
-export type AutosaveStatus = 'saved' | 'saving' | 'offline';
+export type AutosaveStatus = 'saved' | 'saving' | 'offline' | 'error';
 
 interface UseAutosaveProps {
   sessionId?: string;
@@ -29,6 +29,7 @@ export function useAutosave({
   const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryAttemptRef = useRef<number>(0);
   const isSavingRef = useRef<boolean>(false);
+  const hasQueuedSaveRef = useRef<boolean>(false);
 
   // Queue to sessionStorage immediately on local state change
   useEffect(() => {
@@ -63,7 +64,12 @@ export function useAutosave({
   }, [status]);
 
   const triggerSave = useCallback(async () => {
-    if (!sessionId || !enabled || isSavingRef.current) return;
+    if (!sessionId || !enabled) return;
+
+    if (isSavingRef.current) {
+      hasQueuedSaveRef.current = true;
+      return;
+    }
 
     const answersJson = JSON.stringify(answers);
     const codeJson = JSON.stringify(activeCode || {});
@@ -120,7 +126,7 @@ export function useAutosave({
         } catch {}
       }
 
-      setStatus(navigator.onLine ? 'saved' : 'offline');
+      setStatus(navigator.onLine ? 'error' : 'offline');
 
       // Exponential backoff retry (2s, 4s, 8s, max 30s)
       const attempt = retryAttemptRef.current;
@@ -133,6 +139,10 @@ export function useAutosave({
       }, delayMs);
     } finally {
       isSavingRef.current = false;
+      if (hasQueuedSaveRef.current) {
+        hasQueuedSaveRef.current = false;
+        triggerSave();
+      }
     }
   }, [sessionId, enabled, answers, activeCode, user]);
 
