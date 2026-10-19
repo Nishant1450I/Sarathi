@@ -1,6 +1,8 @@
 import { randomUUID as uuidv4 } from 'node:crypto';
 import { repository } from '../data/repository.js';
 import { matchingService } from './matchingService.js';
+import { notificationService } from './notificationService.js';
+import { emailService } from './emailService.js';
 
 export const PIPELINE_STAGES = [
   'new_applicant',
@@ -28,6 +30,59 @@ export const ALLOWED_STAGE_TRANSITIONS = {
   hired: [],
   rejected: ['under_review'],
   withdrawn: [],
+};
+
+export const STAGE_NOTIFICATIONS = {
+  under_review: {
+    type: 'info',
+    title: 'Application Under Review',
+    message: (jobTitle) => `Your application for "${jobTitle}" is currently under review by the hiring team.`
+  },
+  shortlisted: {
+    type: 'success',
+    title: 'Application Shortlisted',
+    message: (jobTitle) => `Great news! Your application for "${jobTitle}" has been shortlisted.`
+  },
+  assessment_invited: {
+    type: 'info',
+    title: 'Skill Assessment Invitation',
+    message: (jobTitle) => `You have been invited to complete a skill assessment for "${jobTitle}". Please check your assessments tab.`
+  },
+  assessment_completed: {
+    type: 'info',
+    title: 'Assessment Received',
+    message: (jobTitle) => `Your assessment submission for "${jobTitle}" has been received and is being evaluated.`
+  },
+  interview_scheduled: {
+    type: 'info',
+    title: 'Interview Scheduled',
+    message: (jobTitle) => `An interview has been scheduled for your application to "${jobTitle}".`
+  },
+  interview_completed: {
+    type: 'info',
+    title: 'Interview Completed',
+    message: (jobTitle) => `Your interview for "${jobTitle}" has been marked as completed. The hiring team will be in touch with next steps.`
+  },
+  offer_extended: {
+    type: 'success',
+    title: 'Job Offer Extended',
+    message: (jobTitle) => `Congratulations! A job offer has been extended for "${jobTitle}". Please review the offer details.`
+  },
+  hired: {
+    type: 'success',
+    title: 'Welcome Aboard!',
+    message: (jobTitle) => `Congratulations! You have been hired for "${jobTitle}".`
+  },
+  rejected: {
+    type: 'info',
+    title: 'Application Update',
+    message: (jobTitle) => `Thank you for your interest in "${jobTitle}". The hiring team has decided to pursue other applicants whose experience more closely matches their current requirements.`
+  },
+  withdrawn: {
+    type: 'info',
+    title: 'Application Withdrawn',
+    message: (jobTitle) => `Your application for "${jobTitle}" has been withdrawn.`
+  }
 };
 
 export const pipelineService = {
@@ -132,7 +187,7 @@ export const pipelineService = {
     const now = new Date().toISOString();
 
     try {
-      return repository.transaction((repo) => {
+      const createdApp = repository.transaction((repo) => {
         repo.execute(
           `INSERT INTO applications (
             id, org_id, job_id, candidate_id, stage, match_score, cover_note, applied_at, updated_at
@@ -149,6 +204,35 @@ export const pipelineService = {
 
         return this.getApplicationById(orgId, id);
       });
+
+      // Candidate lifecycle notification (non-blocking)
+      try {
+        const job = repository.queryOne('SELECT title FROM jobs WHERE id = ?;', [jobId]);
+        const candidate = repository.queryOne('SELECT full_name, email FROM users WHERE id = ?;', [candidateId]);
+        const jobTitle = job?.title || 'the position';
+
+        notificationService.createNotification({
+          userId: candidateId,
+          type: 'info',
+          title: 'Application Submitted',
+          body: `Your application for "${jobTitle}" has been submitted successfully.`,
+          link: `/student/applications/${id}`
+        });
+
+        if (candidate?.email) {
+          emailService.sendCandidateNotificationEmail({
+            to: candidate.email,
+            candidateName: candidate.full_name,
+            title: 'Application Submitted',
+            body: `Your application for "${jobTitle}" has been submitted successfully to the hiring team.`,
+            actionLink: `/student/applications/${id}`
+          }).catch(() => {});
+        }
+      } catch {
+        // Notification failure must not disrupt core workflow
+      }
+
+      return createdApp;
     } catch (err) {
       if (err.message && (err.message.includes('UNIQUE constraint') || err.message.includes('already applied'))) {
         throw new Error('Candidate has already applied for this job');
@@ -206,6 +290,42 @@ export const pipelineService = {
         ]
       );
     });
+
+    // Notify candidate of stage transition without exposing recruiter's internal reason or notes
+    try {
+      const job = repository.queryOne('SELECT title FROM jobs WHERE id = ?;', [app.job_id]);
+      const candidate = repository.queryOne('SELECT full_name, email FROM users WHERE id = ?;', [app.candidate_id]);
+      const jobTitle = job?.title || 'the position';
+
+      const stageInfo = STAGE_NOTIFICATIONS[newStage] || {
+        type: 'info',
+        title: 'Application Update',
+        message: (t) => `Your application for "${t}" has transitioned to ${newStage.replace(/_/g, ' ')}.`
+      };
+
+      const notifTitle = stageInfo.title;
+      const notifBody = stageInfo.message(jobTitle);
+
+      notificationService.createNotification({
+        userId: app.candidate_id,
+        type: stageInfo.type,
+        title: notifTitle,
+        body: notifBody,
+        link: `/student/applications/${applicationId}`
+      });
+
+      if (candidate?.email) {
+        emailService.sendCandidateNotificationEmail({
+          to: candidate.email,
+          candidateName: candidate.full_name,
+          title: notifTitle,
+          body: notifBody,
+          actionLink: `/student/applications/${applicationId}`
+        }).catch(() => {});
+      }
+    } catch {
+      // Notification failure must not disrupt core workflow
+    }
 
     return this.getApplicationById(orgId, applicationId);
   },

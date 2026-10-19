@@ -1,5 +1,7 @@
 import { randomUUID as uuidv4 } from 'node:crypto';
 import { repository } from '../data/repository.js';
+import { notificationService } from './notificationService.js';
+import { emailService } from './emailService.js';
 
 export const verificationService = {
   /**
@@ -68,7 +70,7 @@ export const verificationService = {
     const now = new Date().toISOString();
     const reviewId = `vr-${uuidv4().slice(0, 8)}`;
 
-    return repository.transaction((repo) => {
+    const reviewResult = repository.transaction((repo) => {
       // 1. Insert immutable verification review audit record
       repo.execute(
         `INSERT INTO verification_reviews (
@@ -171,12 +173,53 @@ export const verificationService = {
         verifiedAt: now
       };
     });
+
+    // Notify candidate of verification outcome (non-blocking)
+    try {
+      const skill = repository.queryOne('SELECT name FROM skills WHERE id = ?;', [evidence.skill_id]);
+      const candidate = repository.queryOne('SELECT full_name, email FROM users WHERE id = ?;', [evidence.candidate_id]);
+      const skillName = skill?.name || 'Skill';
+      const isVerified = decision === 'verified';
+      const notifTitle = isVerified ? `Skill Verified: ${skillName}` : `Evidence Review Update: ${skillName}`;
+      const notifBody = isVerified
+        ? `Congratulations! Your evidence submission for "${skillName}" has been verified and added to your Skill Passport.`
+        : `Your evidence submission for "${skillName}" was reviewed: ${decisionRationale.trim()}`;
+
+      notificationService.createNotification({
+        userId: evidence.candidate_id,
+        type: isVerified ? 'success' : 'warning',
+        title: notifTitle,
+        body: notifBody,
+        link: '/student/passport'
+      });
+
+      if (candidate?.email) {
+        emailService.sendCandidateNotificationEmail({
+          to: candidate.email,
+          candidateName: candidate.full_name,
+          title: notifTitle,
+          body: notifBody,
+          actionLink: '/student/passport'
+        }).catch(() => {});
+      }
+    } catch {
+      // Notification failure must not disrupt core workflow
+    }
+
+    return reviewResult;
   },
 
   /**
    * Request additional evidence from a candidate for a specific skill.
    */
   requestEvidence({ orgId, recruiterId, candidateId, skillId, message }) {
+    if (!message || message.trim().length === 0) {
+      throw new Error('Message is required when requesting evidence');
+    }
+
+    const skill = repository.queryOne('SELECT name FROM skills WHERE id = ?;', [skillId]);
+    const candidate = repository.queryOne('SELECT full_name, email FROM users WHERE id = ?;', [candidateId]);
+
     const now = new Date().toISOString();
     const id = `req-${uuidv4().slice(0, 8)}`;
 
@@ -189,11 +232,38 @@ export const verificationService = {
         orgId,
         candidateId,
         recruiterId,
-        `[Evidence Request] Recruiter requested additional evidence for skill: ${message}`,
+        `[Evidence Request] Recruiter requested additional evidence for skill: ${message.trim()}`,
         now,
         now,
       ]
     );
+
+    // Notify candidate of evidence request (non-blocking)
+    try {
+      const skillName = skill?.name || 'Skill';
+      const notifTitle = `Additional Evidence Requested: ${skillName}`;
+      const notifBody = `A recruiter has requested additional evidence for your "${skillName}" skill: "${message.trim()}". Please update your Skill Passport.`;
+
+      notificationService.createNotification({
+        userId: candidateId,
+        type: 'info',
+        title: notifTitle,
+        body: notifBody,
+        link: '/student/passport'
+      });
+
+      if (candidate?.email) {
+        emailService.sendCandidateNotificationEmail({
+          to: candidate.email,
+          candidateName: candidate.full_name,
+          title: notifTitle,
+          body: notifBody,
+          actionLink: '/student/passport'
+        }).catch(() => {});
+      }
+    } catch {
+      // Notification failure must not disrupt core workflow
+    }
 
     return { success: true, requestId: id, requestedAt: now };
   }

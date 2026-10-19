@@ -46,12 +46,32 @@ router.post('/:id/feedback', requireAuth, requireRole(['platform_admin', 'org_ow
   }
 });
 
+router.patch('/:id/reschedule', requireAuth, requireRole(['platform_admin', 'org_owner', 'recruiter']), (req, res, next) => {
+  try {
+    if (!req.orgId) return res.status(403).json({ error: 'Organization context required' });
+    const result = interviewService.rescheduleInterview(req.orgId, req.params.id, req.body, req.user.id);
+    res.json(result);
+  } catch (err) {
+    if (err.message && err.message.includes('not found')) {
+      return res.status(404).json({ error: err.message });
+    }
+    if (err.message && err.message.includes('required')) {
+      return res.status(400).json({ error: err.message });
+    }
+    next(err);
+  }
+});
+
 router.patch('/:id/cancel', requireAuth, requireRole(['platform_admin', 'org_owner', 'recruiter']), (req, res, next) => {
   try {
+    if (!req.orgId) return res.status(403).json({ error: 'Organization context required' });
     const { reason } = req.body;
     const result = interviewService.cancelInterview(req.orgId, req.params.id, reason);
     res.json(result);
   } catch (err) {
+    if (err.message && err.message.includes('not found')) {
+      return res.status(404).json({ error: err.message });
+    }
     next(err);
   }
 });

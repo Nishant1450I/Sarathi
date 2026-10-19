@@ -22,16 +22,30 @@ export const organizationService = {
     );
   },
 
-  updateOrganizationSettings(orgId, settings) {
+  updateOrganizationSettings(orgId, payload) {
     const org = this.getOrganizationById(orgId);
     if (!org) throw new Error('Organization not found');
 
-    const merged = { ...org.settings, ...settings };
+    const { name, timezone, currency, ...otherSettings } = payload || {};
+    const merged = { ...org.settings, ...otherSettings };
     const now = new Date().toISOString();
 
     repository.execute(
-      'UPDATE organisations SET settings = ?, updated_at = ? WHERE id = ?;',
-      [JSON.stringify(merged), now, orgId]
+      `UPDATE organisations SET
+        name = COALESCE(?, name),
+        timezone = COALESCE(?, timezone),
+        currency = COALESCE(?, currency),
+        settings = ?,
+        updated_at = ?
+      WHERE id = ?;`,
+      [
+        name?.trim() || null,
+        timezone || null,
+        currency || null,
+        JSON.stringify(merged),
+        now,
+        orgId
+      ]
     );
 
     return this.getOrganizationById(orgId);

@@ -36,7 +36,11 @@ router.post('/review', requireAuth, requireRole(['platform_admin', 'org_owner', 
 
 router.post('/request', requireAuth, requireRole(['platform_admin', 'org_owner', 'recruiter']), (req, res, next) => {
   try {
+    if (!req.orgId) return res.status(403).json({ error: 'Organization context required' });
     const { candidateId, skillId, message } = req.body;
+    if (!candidateId || !skillId || !message) {
+      return res.status(400).json({ error: 'candidateId, skillId, and message are required' });
+    }
     const result = verificationService.requestEvidence({
       orgId: req.orgId,
       recruiterId: req.user.id,

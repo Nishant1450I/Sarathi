@@ -25,6 +25,7 @@ import feedbackRoutes from './routes/feedbackRoutes.js';
 import passportShareRoutes from './routes/passportShareRoutes.js';
 import resumeRoutes from './routes/resumeRoutes.js';
 import skillEngineRoutes from './routes/skillEngineRoutes.js';
+import recruiterVerificationRoutes from './routes/recruiterVerificationRoutes.js';
 
 // Validate configuration on startup
 validateConfig();
@@ -98,6 +99,7 @@ app.use('/api/feedback', feedbackRoutes);
 app.use('/api/passport', passportShareRoutes);
 app.use('/api/resumes', resumeRoutes);
 app.use('/api/skills', skillEngineRoutes);
+app.use('/api/recruiter/verify', recruiterVerificationRoutes);
 
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
