@@ -27,6 +27,12 @@ export const auth = {
   enableDemoAuth: (process.env.ENABLE_DEMO_AUTH === 'true' || process.env.APP_MODE === 'demo') && process.env.NODE_ENV !== 'production' && process.env.APP_MODE !== 'production',
 };
 
+export const google = {
+  clientId: process.env.GOOGLE_CLIENT_ID || '',
+  allowedHd: process.env.GOOGLE_ALLOWED_HD || '',
+  nonceTtlMs: Number(process.env.GOOGLE_NONCE_TTL_MS || 600000),
+};
+
 /**
  * Validates critical environment configuration settings.
  * Fails safely if unsafe demo settings or fallback secrets are detected in production.
@@ -86,5 +92,7 @@ export const assessmentV2 = {
   codeMaxBytes: Number(process.env.ASSESSMENT_CODE_MAX_BYTES || 20480),
   executionTimeoutMs: Number(process.env.ASSESSMENT_RUNNER_TIMEOUT_MS || 5000),
   passThreshold: Number(process.env.ASSESSMENT_PASS_THRESHOLD || 60),
+  knowledgeWeight: Number(process.env.ASSESSMENT_KNOWLEDGE_WEIGHT || 0.4),
+  practicalWeight: Number(process.env.ASSESSMENT_PRACTICAL_WEIGHT || 0.6),
 };
 

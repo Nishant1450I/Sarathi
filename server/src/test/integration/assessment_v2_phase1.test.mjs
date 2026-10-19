@@ -26,6 +26,7 @@ describe('Phase 1: Assessment V2 Foundation & Security Contracts', () => {
       student1Id, 'v2student1@example.com', 'V2 Student One', now, now,
       student2Id, 'v2student2@example.com', 'V2 Student Two', now, now
     );
+    db.prepare('DELETE FROM assessment_sessions WHERE user_id IN (?, ?)').run(student1Id, student2Id);
 
     candidateToken = authService.generateToken({
       id: student1Id,

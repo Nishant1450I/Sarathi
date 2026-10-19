@@ -59,7 +59,8 @@ export const SkillPassportPage: React.FC = () => {
     projects,
     roadmap,
     overallReadinessScore,
-    assessedSkillsCount
+    assessedSkillsCount,
+    markPassportReviewed
   } = useStudent();
 
   const [shareData, setShareData] = useState<{
@@ -126,6 +127,10 @@ export const SkillPassportPage: React.FC = () => {
   };
 
   // Fetch share configuration & backend evidence
+  useEffect(() => {
+    markPassportReviewed();
+  }, [markPassportReviewed]);
+
   useEffect(() => {
     const fetchShare = async () => {
       try {

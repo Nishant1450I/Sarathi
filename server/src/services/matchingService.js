@@ -189,6 +189,16 @@ export const matchingService = {
 
     const explanation = `Job match of ${matchScore}% calculated deterministically: Required skills coverage is ${requiredCoverage}% (weighted at 70%), Preferred skills coverage is ${preferredCoverage}% (weighted at 20%), plus an assessment verification bonus of +${assessmentBonus}% based on ${passedAssessmentsCount} completed practical assessments. Candidate has ${matchedRequired.length} fully verified required skills, ${unverifiedSkills.length} unverified/pending claims, and ${unmetRequirements.length} unmet competency targets.`;
 
+    const verifiedRequirementsCount = matchedRequired.length;
+    const totalRequirementsCount = requirements.length;
+    const evidenceCoverage = totalRequirementsCount > 0
+      ? Math.round((verifiedRequirementsCount / totalRequirementsCount) * 100)
+      : 100;
+
+    let evidenceUncertainty = 'HIGH';
+    if (evidenceCoverage >= 80) evidenceUncertainty = 'LOW';
+    else if (evidenceCoverage >= 40) evidenceUncertainty = 'MEDIUM';
+
     return {
       matchScore,
       requiredSkillCoverage: requiredCoverage,
@@ -201,6 +211,9 @@ export const matchingService = {
       evidenceMatches: evidenceList,
       assessmentResults,
       explanation,
+      evidenceCoverage,
+      evidenceUncertainty,
+      disclaimer: 'This score represents objective technical competency alignment and is not an automated hiring decision.',
     };
   },
 

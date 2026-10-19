@@ -242,11 +242,16 @@ export class StorageService {
     }
   }
 
-  public static getUserTargetRole(userId: string): string {
+  public static getUserTargetRole(userId: string, fallbackRole?: string): string {
     try {
       const key = `sarathi_${userId}_targetRole`;
       const data = localStorage.getItem(key);
-      if (data !== null) return data;
+      if (data !== null && data.trim()) return data;
+
+      if (fallbackRole && fallbackRole.trim() && fallbackRole !== 'Not selected yet') {
+        localStorage.setItem(key, fallbackRole);
+        return fallbackRole;
+      }
 
       // Check user profile
       const user = this.getUserById(userId);
@@ -254,9 +259,9 @@ export class StorageService {
 
       if (userId === DEMO_STUDENT_ID) return 'Full-Stack Developer';
 
-      return '';
+      return fallbackRole || '';
     } catch {
-      return '';
+      return fallbackRole || '';
     }
   }
 
@@ -276,14 +281,20 @@ export class StorageService {
     }
   }
 
-  public static getUserTargetDomain(userId: string): string {
+  public static getUserTargetDomain(userId: string, fallbackDomain?: string): string {
     try {
       const key = `sarathi_${userId}_targetDomain`;
       const data = localStorage.getItem(key);
-      if (data !== null) return data;
-      return '';
+      if (data !== null && data.trim()) return data;
+
+      if (fallbackDomain && fallbackDomain.trim()) {
+        localStorage.setItem(key, fallbackDomain);
+        return fallbackDomain;
+      }
+
+      return fallbackDomain || '';
     } catch {
-      return '';
+      return fallbackDomain || '';
     }
   }
 
@@ -349,6 +360,42 @@ export class StorageService {
       localStorage.setItem(key, dismissed ? 'true' : 'false');
     } catch (e) {
       console.error('Error saving onboarding dismissed status:', e);
+    }
+  }
+
+  public static getUserPassportReviewed(userId: string): boolean {
+    try {
+      const key = `sarathi_${userId}_reviewedPassport`;
+      return localStorage.getItem(key) === 'true';
+    } catch {
+      return false;
+    }
+  }
+
+  public static setUserPassportReviewed(userId: string, reviewed: boolean): void {
+    try {
+      const key = `sarathi_${userId}_reviewedPassport`;
+      localStorage.setItem(key, reviewed ? 'true' : 'false');
+    } catch (e) {
+      console.error('Error saving reviewed passport status:', e);
+    }
+  }
+
+  public static getUserWelcomeModalSeen(userId: string): boolean {
+    try {
+      const key = `sarathi_${userId}_welcomeModalSeen`;
+      return localStorage.getItem(key) === 'true';
+    } catch {
+      return false;
+    }
+  }
+
+  public static setUserWelcomeModalSeen(userId: string, seen: boolean): void {
+    try {
+      const key = `sarathi_${userId}_welcomeModalSeen`;
+      localStorage.setItem(key, seen ? 'true' : 'false');
+    } catch (e) {
+      console.error('Error saving welcome modal status:', e);
     }
   }
 

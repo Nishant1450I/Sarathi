@@ -15,12 +15,12 @@ export const QuestionPalette: React.FC<QuestionPaletteProps> = ({
   answeredMap,
 }) => {
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-sm">
+    <div className="bg-white border border-[#E0E7F2] rounded-xl p-4 shadow-[var(--shadow-card)]">
       <div className="flex items-center justify-between mb-3 text-xs">
-        <span className="font-semibold text-slate-800 dark:text-slate-200 uppercase tracking-wider text-[11px]">
+        <span className="font-semibold text-[#0B1B43] uppercase tracking-wider text-[11px]">
           Question Palette
         </span>
-        <span className="text-slate-500">
+        <span className="text-[#405B8B]">
           {Object.values(answeredMap).filter(Boolean).length}/{questions.length} Completed
         </span>
       </div>
@@ -30,10 +30,10 @@ export const QuestionPalette: React.FC<QuestionPaletteProps> = ({
           const isCurrent = currentIndex === idx;
           const isAnswered = Boolean(answeredMap[q.id]);
 
-          let typeColor = 'text-slate-400';
+          let typeColor = 'text-[#405B8B]';
           if (q.type === 'code') typeColor = 'text-sky-500';
           else if (q.type === 'sql') typeColor = 'text-amber-500';
-          else if (q.type === 'project') typeColor = 'text-purple-500';
+          else if (q.type === 'project') typeColor = 'text-[#603DF5]';
 
           return (
             <button
@@ -42,10 +42,10 @@ export const QuestionPalette: React.FC<QuestionPaletteProps> = ({
               onClick={() => onSelect(idx)}
               className={`h-11 rounded-lg border flex flex-col items-center justify-center transition-all ${
                 isCurrent
-                  ? 'border-indigo-600 dark:border-indigo-500 ring-2 ring-indigo-500/30 bg-indigo-50/50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-300 font-bold'
+                  ? 'border-[#4F46E5] ring-2 ring-[#4F46E5]/30 bg-[#EEF2FF] text-[#4F46E5] font-bold'
                   : isAnswered
-                  ? 'border-emerald-300 dark:border-emerald-800/80 bg-emerald-50/40 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-300 font-medium'
-                  : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 text-slate-600 dark:text-slate-400'
+                  ? 'border-emerald-300 bg-[#F0FDF4] text-[#16A34A] font-medium'
+                  : 'border-[#E0E7F2] hover:border-[#C7D2FE] text-[#405B8B]'
               }`}
             >
               <span className="text-xs">{idx + 1}</span>
@@ -58,15 +58,15 @@ export const QuestionPalette: React.FC<QuestionPaletteProps> = ({
       </div>
 
       {/* Legend */}
-      <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 pt-3 mt-3 border-t border-slate-100 dark:border-slate-800">
+      <div className="flex items-center justify-between text-[10px] text-[#405B8B] pt-3 mt-3 border-t border-[#E0E7F2]">
         <span className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-indigo-600 inline-block" /> Current
+          <span className="w-2 h-2 rounded-full bg-[#4F46E5] inline-block" /> Current
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" /> Answered
+          <span className="w-2 h-2 rounded-full bg-[#16A34A] inline-block" /> Answered
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-700 inline-block" /> Remaining
+          <span className="w-2 h-2 rounded-full bg-[#E0E7F2] inline-block" /> Remaining
         </span>
       </div>
     </div>

@@ -12,6 +12,14 @@ export interface SkillGapItem {
   whyItMatters: string;
   recommendedAction: string;
   verificationStatus: VerificationStatus;
+  gapStatus?: 'VERIFIED_GAP' | 'PRELIMINARY_GAP' | 'EVIDENCE_NEEDED' | 'BENCHMARK_MET' | 'REASSESSMENT_RECOMMENDED';
+  confidence?: 'HIGH' | 'MEDIUM' | 'LOW' | 'NONE';
+  evidenceStatus?: 'VERIFIED' | 'PROVISIONAL' | 'INSUFFICIENT_EVIDENCE' | 'CONFLICTING' | 'OUTDATED';
+  priorityRationale?: string;
+  isMandatory?: boolean;
+  weight?: number;
+  hasUnmetPrerequisites?: boolean;
+  unmetPrerequisites?: string[];
   domainId?: string;
   isOutsideTargetRole?: boolean; // When student has demonstrated skills not required by current role
 }

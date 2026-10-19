@@ -15,10 +15,12 @@ export function initDb(dbFile = paths.dbFile) {
     db = new DatabaseSync(':memory:');
   }
 
-  // Enable foreign key constraints, WAL mode, and busy timeout
-  db.exec('PRAGMA foreign_keys = ON;');
-  db.exec('PRAGMA journal_mode = WAL;');
+  // Enable busy timeout first, then foreign key constraints and WAL mode
   db.exec('PRAGMA busy_timeout = 5000;');
+  db.exec('PRAGMA foreign_keys = ON;');
+  try {
+    db.exec('PRAGMA journal_mode = WAL;');
+  } catch {}
 
   return db;
 }

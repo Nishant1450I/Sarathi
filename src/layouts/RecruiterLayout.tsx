@@ -117,7 +117,7 @@ const RecruiterLayoutContent: React.FC = () => {
   }
 
   if (!user) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to={`/login?returnTo=${encodeURIComponent(location.pathname + location.search)}`} replace />;
   }
 
   // Enforce role authorization: users without recruiter authorization are redirected to their portal

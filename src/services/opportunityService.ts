@@ -47,16 +47,17 @@ export class OpportunityService {
     sessionStorage.removeItem(this.CANDIDATE_TOKEN_KEY);
   }
 
-  /**
-   * Ensure or retrieve a signed JWT token for the current candidate session.
-   */
   public static async getStudentToken(user?: UserProfile | null): Promise<string | null> {
-    const primaryToken = sessionStorage.getItem('sarathi_auth_token');
+    const primaryToken =
+      typeof window !== 'undefined'
+        ? sessionStorage.getItem('sarathi_auth_token') || localStorage.getItem('sarathi_auth_token')
+        : null;
     if (primaryToken) {
       return primaryToken;
     }
 
-    const cachedToken = sessionStorage.getItem(this.CANDIDATE_TOKEN_KEY);
+    const cachedToken =
+      typeof window !== 'undefined' ? sessionStorage.getItem(this.CANDIDATE_TOKEN_KEY) : null;
     if (cachedToken) {
       return cachedToken;
     }

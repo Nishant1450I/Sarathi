@@ -40,16 +40,16 @@ export const ModeSelect: React.FC<ModeSelectProps> = ({
           onClick={() => onSelectMode('practice')}
           className={`cursor-pointer relative p-6 rounded-2xl border-2 transition-all flex flex-col justify-between ${
             selectedMode === 'practice'
-              ? 'border-emerald-500 bg-white shadow-lg ring-2 ring-emerald-500/20'
-              : 'border-slate-200 hover:border-slate-300 bg-white shadow-sm'
+              ? 'border-[#087BFA] bg-[#EFF6FF] shadow-md ring-2 ring-[#087BFA]/20'
+              : 'border-[#E0E7F2] hover:border-[#087BFA]/50 hover:bg-blue-50/30 bg-white shadow-[var(--shadow-card)]'
           }`}
         >
           <div>
             <div className="flex items-center justify-between mb-4">
-              <div className="p-3 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100">
+              <div className={`p-3 rounded-xl border transition-colors ${selectedMode === 'practice' ? 'bg-[#087BFA] text-white border-[#087BFA]' : 'bg-blue-50 text-[#087BFA] border-blue-200'}`}>
                 <BookOpen className="w-6 h-6" />
               </div>
-              <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800">
+              <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${selectedMode === 'practice' ? 'bg-blue-100 text-[#0B1B43] border-blue-200' : 'bg-[#F4F7FC] text-[#405B8B] border-[#E0E7F2]'}`}>
                 Self-Paced · Zero Risk
               </span>
             </div>
@@ -61,15 +61,15 @@ export const ModeSelect: React.FC<ModeSelectProps> = ({
 
             <div className="space-y-3 border-t border-slate-100 pt-4 text-xs text-slate-700">
               <div className="flex items-start gap-2.5">
-                <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                <Check className="w-4 h-4 text-[#16A34A] shrink-0 mt-0.5" />
                 <span><strong>Instant Solutions:</strong> View detailed code & explanation after every task</span>
               </div>
               <div className="flex items-start gap-2.5">
-                <Clock className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                <Clock className="w-4 h-4 text-[#087BFA] shrink-0 mt-0.5" />
                 <span><strong>Self-Paced Sandbox:</strong> Pause timer anytime with unlimited retries</span>
               </div>
               <div className="flex items-start gap-2.5">
-                <EyeOff className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                <EyeOff className="w-4 h-4 text-[#087BFA] shrink-0 mt-0.5" />
                 <span><strong>100% Private:</strong> Scores stay strictly confidential (hidden from recruiters)</span>
               </div>
               <div className="flex items-start gap-2.5">
@@ -80,9 +80,9 @@ export const ModeSelect: React.FC<ModeSelectProps> = ({
           </div>
 
           <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between text-xs">
-            <span className="text-slate-500">Best for: Preparation & diagnostic</span>
-            <span className={`font-bold ${selectedMode === 'practice' ? 'text-emerald-600' : 'text-slate-400'}`}>
-              {selectedMode === 'practice' ? '✓ Selected' : 'Click to select'}
+            <span className="text-[#405B8B]">Best for: Preparation &amp; diagnostic</span>
+            <span className={`font-bold ${selectedMode === 'practice' ? 'text-[#087BFA]' : 'text-[#8FA1C0]'}`}>
+              {selectedMode === 'practice' ? '● Selected' : '○ Click to select'}
             </span>
           </div>
         </div>
@@ -92,8 +92,8 @@ export const ModeSelect: React.FC<ModeSelectProps> = ({
           onClick={() => onSelectMode('secure')}
           className={`cursor-pointer relative p-6 rounded-2xl border-2 transition-all flex flex-col justify-between ${
             selectedMode === 'secure'
-              ? 'border-indigo-600 bg-gradient-to-b from-indigo-50/60 to-white shadow-xl ring-2 ring-indigo-600/30'
-              : 'border-slate-200 hover:border-indigo-300 bg-white shadow-sm'
+              ? 'border-[#4F46E5] bg-[#EEF2FF] shadow-md ring-2 ring-[#4F46E5]/20'
+              : 'border-[#E0E7F2] hover:border-[#4F46E5]/50 hover:bg-indigo-50/30 bg-white shadow-[var(--shadow-card)]'
           }`}
         >
           {/* Top highlight badge */}
@@ -114,7 +114,7 @@ export const ModeSelect: React.FC<ModeSelectProps> = ({
 
             <h2 className="text-xl font-bold text-[#0B1B43] mb-1 flex items-center gap-2">
               <span>Secure Mode</span>
-              <span className="text-xs px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 font-semibold">Official</span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#4F46E5] text-white font-bold tracking-wide uppercase">Official</span>
             </h2>
             <p className="text-xs text-[#405B8B] mb-5 leading-relaxed">
               Standardized evaluation with focus monitoring. Verified credentials unlock direct recruiter pipelines.
@@ -147,9 +147,9 @@ export const ModeSelect: React.FC<ModeSelectProps> = ({
           </div>
 
           <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between text-xs">
-            <span className="text-indigo-600 font-semibold">Best for: Getting shortlisted for jobs</span>
-            <span className={`font-bold ${selectedMode === 'secure' ? 'text-indigo-600' : 'text-slate-400'}`}>
-              {selectedMode === 'secure' ? '✓ Selected' : 'Click to select'}
+            <span className="text-[#4F46E5] font-semibold">Best for: Getting shortlisted for jobs</span>
+            <span className={`font-bold ${selectedMode === 'secure' ? 'text-[#4F46E5]' : 'text-[#8FA1C0]'}`}>
+              {selectedMode === 'secure' ? '● Selected' : '○ Click to select'}
             </span>
           </div>
         </div>
@@ -165,8 +165,8 @@ export const ModeSelect: React.FC<ModeSelectProps> = ({
           onClick={onContinue}
           className={`inline-flex items-center px-6 py-3 rounded-xl font-bold text-sm text-white transition-all shadow-md cursor-pointer ${
             selectedMode === 'secure'
-              ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 shadow-indigo-500/25'
-              : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/25'
+              ? 'bg-[#4F46E5] hover:bg-[#4338CA] shadow-indigo-500/25'
+              : 'bg-[#087BFA] hover:bg-[#0068DE] shadow-blue-500/25'
           }`}
         >
           <span>{selectedMode === 'secure' ? 'Continue to Session Rules & Consent' : 'Begin Practice Assessment'}</span>

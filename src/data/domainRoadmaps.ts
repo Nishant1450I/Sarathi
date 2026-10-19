@@ -1,5 +1,6 @@
 import type { StudentRoadmap, RoadmapStage, RoadmapTask } from '../types/roadmap';
 import type { SkillGapItem } from '../types/gap';
+import type { AssessmentResult } from '../types/assessment';
 import { getRoleRequirements } from './domainsCatalog';
 
 export interface DomainTrackResolution {
@@ -1209,11 +1210,212 @@ export const softwareEngRoadmap: StudentRoadmap = {
   ]
 };
 
+// 9. WEB DEVELOPMENT ROADMAP (Full-Stack Developer)
+export const webDevRoadmap: StudentRoadmap = {
+  targetRole: 'Full-Stack Developer',
+  overallProgress: 0,
+  recommendedNextTaskId: 'task-1-1',
+  stages: [
+    {
+      id: 'stage-1',
+      stageNumber: 1,
+      title: 'Foundations of Modern Web',
+      description: 'Master core web technologies, responsive layouts, semantic markup, and modern JavaScript syntax.',
+      tasks: [
+        {
+          id: 'task-1-1',
+          stageId: 'stage-1',
+          topic: 'Semantic HTML5 & Accessibility',
+          description: 'Learn landmark elements, ARIA attributes, document structure, and screen reader compatibility.',
+          relevanceToRole: 'Essential foundation for creating professional, accessible web applications.',
+          estimatedDuration: '3 hours',
+          difficulty: 'Beginner',
+          resourceName: 'MDN Web Docs — HTML Structuring',
+          resourceUrl: 'https://developer.mozilla.org/en-US/docs/Learn/HTML',
+          isFreeResource: true,
+          isCompleted: false
+        },
+        {
+          id: 'task-1-2',
+          stageId: 'stage-1',
+          topic: 'CSS Flexbox & Grid Masterclass',
+          description: 'Build complex, mobile-responsive page layouts without relying on heavy UI frameworks.',
+          relevanceToRole: 'Crucial for styling responsive full-stack web layouts.',
+          estimatedDuration: '5 hours',
+          difficulty: 'Beginner',
+          resourceName: 'CSS-Tricks Complete Guide to Flexbox & Grid',
+          resourceUrl: 'https://css-tricks.com/snippets/css/a-guide-to-flexbox/',
+          isFreeResource: true,
+          isCompleted: false
+        },
+        {
+          id: 'task-1-3',
+          stageId: 'stage-1',
+          topic: 'Modern JavaScript (ES6+)',
+          description: 'Master arrow functions, destructuring, promises, async/await, closures, and modules.',
+          relevanceToRole: 'Core language powering both React frontend and Node backend.',
+          estimatedDuration: '8 hours',
+          difficulty: 'Intermediate',
+          resourceName: 'javascript.info — The Modern JavaScript Tutorial',
+          resourceUrl: 'https://javascript.info/',
+          isFreeResource: true,
+          isCompleted: false
+        }
+      ]
+    },
+    {
+      id: 'stage-2',
+      stageNumber: 2,
+      title: 'Frontend Mastery with React & TypeScript',
+      description: 'Build component-driven user interfaces with state management, hooks, and static type safety.',
+      tasks: [
+        {
+          id: 'task-2-1',
+          stageId: 'stage-2',
+          topic: 'React Fundamentals & State',
+          description: 'Understand JSX, props, state, event handling, and component lifecycle with hooks.',
+          relevanceToRole: 'Industry standard library for building dynamic full-stack user interfaces.',
+          estimatedDuration: '10 hours',
+          difficulty: 'Intermediate',
+          resourceName: 'React Documentation — Describing the UI',
+          resourceUrl: 'https://react.dev/learn',
+          isFreeResource: true,
+          isCompleted: false
+        },
+        {
+          id: 'task-2-2',
+          stageId: 'stage-2',
+          topic: 'TypeScript for React Developers',
+          description: 'Type React components, props, hooks, custom events, and API response structures.',
+          relevanceToRole: 'Reduces runtime bugs and ensures code quality in team environments.',
+          estimatedDuration: '6 hours',
+          difficulty: 'Intermediate',
+          resourceName: 'TypeScript Handbook for React',
+          resourceUrl: 'https://www.typescriptlang.org/docs/handbook/react.html',
+          isFreeResource: true,
+          isCompleted: false
+        }
+      ]
+    },
+    {
+      id: 'stage-3',
+      stageNumber: 3,
+      title: 'Backend Architecture with Node & Express',
+      description: 'Design robust HTTP REST APIs, middleware pipelines, authentication, and error handling.',
+      tasks: [
+        {
+          id: 'task-3-1',
+          stageId: 'stage-3',
+          topic: 'Node.js & Express API Development',
+          description: 'Build HTTP servers, route parameters, controllers, and JSON responses with Express.',
+          relevanceToRole: 'Powers server-side business logic and endpoint creation.',
+          estimatedDuration: '8 hours',
+          difficulty: 'Intermediate',
+          resourceName: 'Express.js Getting Started Guide',
+          resourceUrl: 'https://expressjs.com/en/starter/installing.html',
+          isFreeResource: true,
+          isCompleted: false
+        },
+        {
+          id: 'task-3-2',
+          stageId: 'stage-3',
+          topic: 'JWT Authentication & Security',
+          description: 'Implement JSON Web Tokens, password hashing with bcrypt, and protected middleware routes.',
+          relevanceToRole: 'Essential for user login systems and API security.',
+          estimatedDuration: '5 hours',
+          difficulty: 'Advanced',
+          resourceName: 'Auth0 JWT Security Best Practices',
+          resourceUrl: 'https://jwt.io/introduction',
+          isFreeResource: true,
+          isCompleted: false
+        }
+      ]
+    },
+    {
+      id: 'stage-4',
+      stageNumber: 4,
+      title: 'Databases & Persistent Data Storage',
+      description: 'Design relational schemas, write performant SQL queries, and integrate ORMs / Supabase.',
+      tasks: [
+        {
+          id: 'task-4-1',
+          stageId: 'stage-4',
+          topic: 'Relational Database Design & SQL',
+          description: 'Master table normalized design, primary/foreign keys, joins, indexing, and aggregations.',
+          relevanceToRole: 'Stores user accounts, skill profiles, and application records.',
+          estimatedDuration: '7 hours',
+          difficulty: 'Intermediate',
+          resourceName: 'PostgreSQL Official Documentation & Tutorial',
+          resourceUrl: 'https://www.postgresqltutorial.com/',
+          isFreeResource: true,
+          isCompleted: false
+        },
+        {
+          id: 'task-4-2',
+          stageId: 'stage-4',
+          topic: 'Supabase / PostgreSQL Integration',
+          description: 'Configure database tables, Row Level Security (RLS) policies, and client queries.',
+          relevanceToRole: 'Modern cloud database integration for full-stack web applications.',
+          estimatedDuration: '4 hours',
+          difficulty: 'Intermediate',
+          resourceName: 'Supabase Official Quickstart',
+          resourceUrl: 'https://supabase.com/docs',
+          isFreeResource: true,
+          isCompleted: false
+        }
+      ]
+    },
+    {
+      id: 'stage-5',
+      stageNumber: 5,
+      title: 'Full-Stack Project & Capstone',
+      description: 'Combine frontend React, Node API, database persistence, and deployment into a live product.',
+      tasks: [
+        {
+          id: 'task-5-1',
+          stageId: 'stage-5',
+          topic: 'Capstone: End-to-End SaaS Web App',
+          description: 'Build a feature-rich web app with authentication, CRUD operations, dark mode, and responsive UI.',
+          relevanceToRole: 'Tangible project evidence required for Skill Passport and recruiter matching.',
+          estimatedDuration: '20 hours',
+          difficulty: 'Advanced',
+          resourceName: 'Full Stack Open — Deep Dive into Modern Web Development',
+          resourceUrl: 'https://fullstackopen.com/en/',
+          isFreeResource: true,
+          isCompleted: false
+        }
+      ]
+    },
+    {
+      id: 'stage-6',
+      stageNumber: 6,
+      title: 'Portfolio, Interview & Career Readiness',
+      description: 'Prepare your Skill Passport, optimize GitHub portfolio repositories, and practice technical interviews.',
+      tasks: [
+        {
+          id: 'task-6-1',
+          stageId: 'stage-6',
+          topic: 'Skill Passport & GitHub Optimization',
+          description: 'Format clean README files, host live demos on Vercel/Netlify, and showcase verified skills.',
+          relevanceToRole: 'Differentiates your portfolio to hiring recruiters.',
+          estimatedDuration: '4 hours',
+          difficulty: 'Intermediate',
+          resourceName: 'GitHub Portfolio Guide for Engineers',
+          resourceUrl: 'https://docs.github.com/en/get-started',
+          isFreeResource: true,
+          isCompleted: false
+        }
+      ]
+    }
+  ]
+};
+
 // ============================================================================
 // REGISTRY MAP
 // ============================================================================
 
 export const canonicalDomainRoadmaps: Record<string, StudentRoadmap> = {
+  'web-dev': webDevRoadmap,
   'machine-learning': machineLearningRoadmap,
   'artificial-intelligence': artificialIntelligenceRoadmap,
   'cybersecurity': cybersecurityRoadmap,
@@ -1224,47 +1426,135 @@ export const canonicalDomainRoadmaps: Record<string, StudentRoadmap> = {
 };
 
 /**
- * Cross-references roadmap tasks with high-priority skill gaps and promotes them.
+ * Data-backed personalization engine:
+ * Cross-references assessment scores, diagnostic skill gaps, and role benchmarks
+ * to adapt roadmap tasks without wiping student completion progress.
  */
-export const prioritizeRoadmapTasksWithGaps = (
+export const personalizeRoadmapWithAssessmentAndGaps = (
   roadmap: StudentRoadmap,
-  skillGaps?: SkillGapItem[]
+  skillGaps?: SkillGapItem[],
+  assessmentHistory?: AssessmentResult[],
+  activeRole?: string
 ): StudentRoadmap => {
-  if (!skillGaps || skillGaps.length === 0) {
-    return roadmap;
-  }
+  const role = activeRole || roadmap.targetRole || '';
+  const resolved = resolveDomainTrack(role);
 
-  const highPriorityGaps = skillGaps.filter(g => g.priority === 'High' || g.priority === 'Medium');
-  if (highPriorityGaps.length === 0) {
-    return roadmap;
+  // Find latest matching assessment attempt for this track/domain
+  const matchingAssessment = assessmentHistory?.find(a => {
+    if (a.domainId && (a.domainId === resolved.domainId || a.domainId === resolved.trackKey)) return true;
+    if (a.targetRole && a.targetRole.toLowerCase() === role.toLowerCase()) return true;
+    const aTrack = resolveDomainTrack(a.targetRole || a.domainId);
+    return aTrack.trackKey === resolved.trackKey;
+  });
+
+  const highPriorityGaps = (skillGaps || []).filter(g => g.priority === 'High' || g.priority === 'Medium');
+  const roleReqs = getRoleRequirements(role);
+  const benchmarkMap = new Map<string, number>();
+  if (roleReqs?.requiredSkills) {
+    roleReqs.requiredSkills.forEach(s => {
+      benchmarkMap.set(s.skillName.toLowerCase(), s.requiredProficiency * 20); // 1-5 scale -> 20-100%
+    });
   }
 
   let foundRecommendedTaskId = '';
+  let priorityGapCount = 0;
+  let strongSkillsCount = 0;
 
   const updatedStages: RoadmapStage[] = roadmap.stages.map(stage => {
     const updatedTasks: RoadmapTask[] = stage.tasks.map(task => {
       const topicLower = task.topic.toLowerCase();
       const descLower = task.description.toLowerCase();
 
+      // Check matched skill gap
       const matchedGap = highPriorityGaps.find(g => {
         const sName = g.skillName.toLowerCase();
-        return (
-          topicLower.includes(sName) ||
-          sName.includes(topicLower) ||
-          descLower.includes(sName)
-        );
+        return topicLower.includes(sName) || sName.includes(topicLower) || descLower.includes(sName);
       });
 
-      const isPriorityGap = Boolean(matchedGap);
+      // Check assessment skill score
+      let assessedScore: number | undefined;
+      if (matchingAssessment?.skillScores && matchingAssessment.skillScores.length > 0) {
+        const matchedScoreObj = matchingAssessment.skillScores.find(s => {
+          const sName = s.skillName.toLowerCase();
+          return topicLower.includes(sName) || sName.includes(topicLower) || descLower.includes(sName);
+        });
+        if (matchedScoreObj) assessedScore = matchedScoreObj.score;
+      }
+
+      // Check category score fallback
+      if (assessedScore === undefined && matchingAssessment?.categoryScores) {
+        const matchedCat = matchingAssessment.categoryScores.find(c => {
+          const cName = c.category.toLowerCase();
+          return topicLower.includes(cName) || descLower.includes(cName);
+        });
+        if (matchedCat) assessedScore = matchedCat.score;
+      }
+
+      // Check role benchmark target
+      let benchmarkTarget: number | undefined;
+      for (const [sKey, bVal] of benchmarkMap.entries()) {
+        if (topicLower.includes(sKey) || sKey.includes(topicLower)) {
+          benchmarkTarget = bVal;
+          break;
+        }
+      }
+      if (!benchmarkTarget) benchmarkTarget = 70; // baseline 70%
+
+      const hasAssessment = Boolean(matchingAssessment);
+      const isPriorityGap = Boolean(matchedGap) || (hasAssessment && assessedScore !== undefined && assessedScore < benchmarkTarget);
+      const isBenchmarkMet = hasAssessment && assessedScore !== undefined && assessedScore >= benchmarkTarget;
+
+      if (isPriorityGap) priorityGapCount++;
+      if (isBenchmarkMet) strongSkillsCount++;
 
       if (isPriorityGap && !task.isCompleted && !foundRecommendedTaskId) {
         foundRecommendedTaskId = task.id;
       }
 
+      // Supply hands-on practical prompt if not present
+      let practicePrompt = task.practicePrompt;
+      if (!practicePrompt) {
+        if (topicLower.includes('html') || topicLower.includes('markup') || topicLower.includes('accessibility')) {
+          practicePrompt = 'Build an accessible form adhering to WAI-ARIA authoring practices, explicit form labels, and keyboard tab order.';
+        } else if (topicLower.includes('css') || topicLower.includes('flexbox') || topicLower.includes('grid')) {
+          practicePrompt = 'Implement a dynamic multi-breakpoint responsive dashboard using CSS Grid auto-fit and Flexbox layouts without UI libraries.';
+        } else if (topicLower.includes('javascript') || topicLower.includes('es6')) {
+          practicePrompt = 'Create an async request dispatcher with Promise.allSettled and exponential backoff retry for network resilience.';
+        } else if (topicLower.includes('react') || topicLower.includes('state')) {
+          practicePrompt = 'Construct a state-driven component with optimistic local updates, error rollback, and custom hook encapsulation.';
+        } else if (topicLower.includes('typescript')) {
+          practicePrompt = 'Define generic discriminating union types and strict zod validator schemas for type-safe API communication.';
+        } else if (topicLower.includes('node') || topicLower.includes('express')) {
+          practicePrompt = 'Implement a REST controller with JWT bearer token verification middleware, rate limiting, and centralized error handling.';
+        } else if (topicLower.includes('sql') || topicLower.includes('database')) {
+          practicePrompt = 'Write a normalized relational schema with foreign key constraints, composite index, and an analytical aggregation query.';
+        } else if (topicLower.includes('capstone') || topicLower.includes('project')) {
+          practicePrompt = 'Develop and deploy an end-to-end full stack application, write integration tests, and submit repository URL for passport verification.';
+        } else {
+          practicePrompt = `Complete a practical code challenge demonstrating production-quality implementation of ${task.topic}.`;
+        }
+      }
+
+      const isProjectEligible =
+        task.topic.toLowerCase().includes('capstone') ||
+        task.topic.toLowerCase().includes('project') ||
+        stage.title.toLowerCase().includes('capstone') ||
+        stage.stageNumber >= 5;
+
       return {
         ...task,
         prioritySkillGap: isPriorityGap,
-        relatedSkill: matchedGap?.skillName
+        benchmarkMet: isBenchmarkMet,
+        isStrong: isBenchmarkMet,
+        diagnosticScore: assessedScore,
+        benchmarkTargetScore: benchmarkTarget,
+        relatedSkill: matchedGap?.skillName || task.relatedSkill,
+        whyThisTask: isPriorityGap
+          ? (assessedScore !== undefined ? `Verified diagnostic gap: Scored ${assessedScore}% vs ${benchmarkTarget}% benchmark.` : 'Priority skill gap identified for target role.')
+          : (isBenchmarkMet ? `Demonstrated competency: Scored ${assessedScore}% (Role benchmark ${benchmarkTarget}% met).` : task.whyThisTask),
+        practicePrompt,
+        projectSubmissionEligible: isProjectEligible,
+        resourceType: isProjectEligible ? ('project' as const) : (task.resourceUrl.includes('github') ? ('interactive' as const) : ('documentation' as const))
       };
     });
 
@@ -1274,7 +1564,6 @@ export const prioritizeRoadmapTasksWithGaps = (
     };
   });
 
-  // If no incomplete priority gap task was found, pick the first incomplete task
   if (!foundRecommendedTaskId) {
     for (const stage of updatedStages) {
       const firstIncomplete = stage.tasks.find(t => !t.isCompleted);
@@ -1285,11 +1574,30 @@ export const prioritizeRoadmapTasksWithGaps = (
     }
   }
 
+  const isPersonalized = Boolean(matchingAssessment);
+
   return {
     ...roadmap,
     stages: updatedStages,
-    recommendedNextTaskId: foundRecommendedTaskId || roadmap.recommendedNextTaskId
+    recommendedNextTaskId: foundRecommendedTaskId || roadmap.recommendedNextTaskId,
+    isPersonalized,
+    hasAssessmentData: Boolean(matchingAssessment),
+    assessmentDate: matchingAssessment?.completedAt,
+    assessmentScore: matchingAssessment?.overallScore,
+    assessmentId: matchingAssessment?.id,
+    priorityGapCount,
+    strongSkillsCount
   };
+};
+
+/**
+ * Backward-compatible wrapper for prioritizeRoadmapTasksWithGaps.
+ */
+export const prioritizeRoadmapTasksWithGaps = (
+  roadmap: StudentRoadmap,
+  skillGaps?: SkillGapItem[]
+): StudentRoadmap => {
+  return personalizeRoadmapWithAssessmentAndGaps(roadmap, skillGaps);
 };
 
 /**

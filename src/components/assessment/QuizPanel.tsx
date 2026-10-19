@@ -12,6 +12,8 @@ interface QuizPanelProps {
   onExplanationChange?: (text: string) => void;
   onNext: () => void;
   onPrev: () => void;
+  pasteAllowed?: boolean;
+  onPasteBlocked?: () => void;
 }
 
 export const QuizPanel: React.FC<QuizPanelProps> = ({
@@ -24,16 +26,30 @@ export const QuizPanel: React.FC<QuizPanelProps> = ({
   onExplanationChange,
   onNext,
   onPrev,
+  pasteAllowed = true,
+  onPasteBlocked,
 }) => {
   const letters = ['A', 'B', 'C', 'D', 'E', 'F'];
 
+  const handleCopyPaste = (e: React.ClipboardEvent) => {
+    if (!pasteAllowed) {
+      e.preventDefault();
+      onPasteBlocked?.();
+    }
+  };
+
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 sm:p-8 shadow-sm flex flex-col justify-between min-h-[480px]">
+    <div
+      onCopy={handleCopyPaste}
+      onCut={handleCopyPaste}
+      onPaste={handleCopyPaste}
+      className="bg-white border border-[#E0E7F2] rounded-2xl p-6 sm:p-8 shadow-[var(--shadow-card)] flex flex-col justify-between min-h-[480px]"
+    >
       <div>
         {/* Header badges */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300">
+            <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-blue-50 text-[#087BFA] border border-blue-200">
               {question.skillName} • Difficulty {question.difficulty}/3
             </span>
             <span className="text-xs text-slate-500 font-mono">
@@ -46,7 +62,7 @@ export const QuizPanel: React.FC<QuizPanelProps> = ({
         </div>
 
         {/* Question Prompt */}
-        <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white mb-6 leading-relaxed">
+        <h2 className="text-base sm:text-lg font-bold text-[#0B1B43] mb-6 leading-relaxed">
           {question.prompt}
         </h2>
 
@@ -61,15 +77,15 @@ export const QuizPanel: React.FC<QuizPanelProps> = ({
                 onClick={() => onSelectOption(idx)}
                 className={`w-full text-left p-4 rounded-xl border transition-all flex items-start gap-3.5 text-sm ${
                   isSelected
-                    ? 'border-indigo-600 bg-indigo-50/70 dark:bg-indigo-950/40 dark:border-indigo-500 text-indigo-950 dark:text-indigo-200 shadow-sm'
-                    : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200'
+                    ? 'border-indigo-600 border-[#4F46E5] bg-[#EEF2FF] text-[#0B1B43] shadow-sm'
+                    : 'border-[#E0E7F2] hover:border-[#C7D2FE] bg-white text-[#405B8B]'
                 }`}
               >
                 <span
                   className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 transition-colors ${
                     isSelected
-                      ? 'bg-indigo-600 text-white dark:bg-indigo-500'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                      ? 'bg-[#4F46E5] text-white'
+                      : 'bg-[#F4F7FC] text-[#405B8B]'
                   }`}
                 >
                   {letters[idx] || idx + 1}
@@ -82,8 +98,8 @@ export const QuizPanel: React.FC<QuizPanelProps> = ({
 
         {/* Short Explanation Justification Box */}
         {onExplanationChange && (
-          <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
-            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5 flex items-center gap-1.5">
+          <div className="pt-2 border-t border-[#E0E7F2]">
+            <label className="block text-xs font-medium text-[#405B8B] mb-1.5 flex items-center gap-1.5">
               <MessageSquareText className="w-3.5 h-3.5 text-slate-400" />
               Briefly explain your reasoning (Optional - evaluates understanding)
             </label>
@@ -92,19 +108,19 @@ export const QuizPanel: React.FC<QuizPanelProps> = ({
               value={explanationText}
               onChange={(e) => onExplanationChange(e.target.value)}
               placeholder="e.g. useCallback caches function references across re-renders to maintain referential equality..."
-              className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-800 dark:text-slate-200 focus:ring-1 focus:ring-indigo-500 outline-none"
+              className="w-full bg-[#F4F7FC] border border-[#E0E7F2] rounded-lg px-3 py-2 text-xs text-[#0B1B43] focus:ring-1 focus:ring-[#4F46E5] outline-none"
             />
           </div>
         )}
       </div>
 
       {/* Footer Navigation Buttons */}
-      <div className="flex items-center justify-between pt-6 border-t border-slate-100 dark:border-slate-800 mt-6">
+      <div className="flex items-center justify-between pt-6 border-t border-[#E0E7F2] mt-6">
         <button
           type="button"
           onClick={onPrev}
           disabled={currentIndex === 0}
-          className="px-4 py-2 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors"
+          className="px-4 py-2 border border-[#E0E7F2] hover:bg-[#F4F7FC] disabled:opacity-40 text-[#405B8B] rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors"
         >
           <ChevronLeft className="w-4 h-4" /> Previous
         </button>
@@ -112,7 +128,7 @@ export const QuizPanel: React.FC<QuizPanelProps> = ({
         <button
           type="button"
           onClick={onNext}
-          className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm"
+          className="px-5 py-2 bg-[#4F46E5] hover:bg-[#4338CA] text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm"
         >
           {currentIndex === totalQuestions - 1 ? 'Review & Submit' : 'Next Question'}
           <ChevronRight className="w-4 h-4" />

@@ -1,4 +1,4 @@
-import '@testing-library/jest-dom';
+import '@testing-library/jest-dom/vitest';
 
 // Polyfill window.matchMedia if not available in jsdom
 if (typeof window !== 'undefined' && !window.matchMedia) {
