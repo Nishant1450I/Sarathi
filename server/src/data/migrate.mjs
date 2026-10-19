@@ -58,6 +58,55 @@ export function runMigrations(dbFile) {
         db.exec("ALTER TABLE assessment_sessions ADD COLUMN save_version INTEGER DEFAULT 1;");
       }
     }
+
+    // Schema v5 migrations: passport_shares, learning_resources, resource_bookmarks, resource_progress
+    const sharesCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='passport_shares';").get();
+    if (sharesCheck) {
+      const cols = db.prepare("PRAGMA table_info(passport_shares);").all();
+      const colNames = new Set(cols.map(c => c.name));
+      if (!colNames.has('sections_config')) {
+        db.exec(`ALTER TABLE passport_shares ADD COLUMN sections_config TEXT DEFAULT '{"includeSkills":true,"includeProjects":true,"includeContact":false,"includeAssessments":true}';`);
+      }
+    }
+
+    const resourcesCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='learning_resources';").get();
+    if (resourcesCheck) {
+      const cols = db.prepare("PRAGMA table_info(learning_resources);").all();
+      const colNames = new Set(cols.map(c => c.name));
+      if (!colNames.has('description')) {
+        db.exec("ALTER TABLE learning_resources ADD COLUMN description TEXT DEFAULT '';");
+      }
+      if (!colNames.has('learning_objectives')) {
+        db.exec("ALTER TABLE learning_resources ADD COLUMN learning_objectives TEXT DEFAULT '[]';");
+      }
+      if (!colNames.has('prerequisites')) {
+        db.exec("ALTER TABLE learning_resources ADD COLUMN prerequisites TEXT DEFAULT '[]';");
+      }
+    }
+
+    const bookmarksCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='resource_bookmarks';").get();
+    if (bookmarksCheck) {
+      const cols = db.prepare("PRAGMA table_info(resource_bookmarks);").all();
+      const colNames = new Set(cols.map(c => c.name));
+      if (!colNames.has('collection_name')) {
+        db.exec("ALTER TABLE resource_bookmarks ADD COLUMN collection_name TEXT DEFAULT 'my_list';");
+      }
+    }
+
+    const progressCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='resource_progress';").get();
+    if (progressCheck) {
+      const cols = db.prepare("PRAGMA table_info(resource_progress);").all();
+      const colNames = new Set(cols.map(c => c.name));
+      if (!colNames.has('percent_complete')) {
+        db.exec("ALTER TABLE resource_progress ADD COLUMN percent_complete INTEGER DEFAULT 0;");
+      }
+      if (!colNames.has('notes')) {
+        db.exec("ALTER TABLE resource_progress ADD COLUMN notes TEXT DEFAULT '';");
+      }
+      if (!colNames.has('completed_at')) {
+        db.exec("ALTER TABLE resource_progress ADD COLUMN completed_at TEXT;");
+      }
+    }
   } catch (err) {
     console.warn('Column migration note:', err.message);
   }

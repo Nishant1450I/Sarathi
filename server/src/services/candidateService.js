@@ -254,22 +254,38 @@ export const candidateService = {
     liveDemoUrl = null,
     skillsDemonstrated = [],
     technologies = [],
-    domainId = null
+    domainId = null,
+    evidenceType = 'project_repo'
   }) {
     if (!candidateId) throw new Error('Candidate ID is required');
-    if (!title || !title.trim()) throw new Error('Project title is required');
-    if (!description || !description.trim()) throw new Error('Project description is required');
-    if (!repositoryUrl || !repositoryUrl.trim()) throw new Error('Repository URL is required');
+    if (!title || !title.trim()) throw new Error('Evidence title is required');
+    if (!description || !description.trim()) throw new Error('Evidence description is required');
+    if (!repositoryUrl || !repositoryUrl.trim()) throw new Error('Reference URL is required');
 
     const cleanRepoUrl = repositoryUrl.trim();
     if (!cleanRepoUrl.startsWith('http://') && !cleanRepoUrl.startsWith('https://')) {
-      throw new Error('Repository URL must start with http:// or https://');
+      throw new Error('Reference URL must start with http:// or https://');
     }
     if (liveDemoUrl && liveDemoUrl.trim()) {
       const cleanDemo = liveDemoUrl.trim();
       if (!cleanDemo.startsWith('http://') && !cleanDemo.startsWith('https://')) {
         throw new Error('Live demo URL must start with http:// or https://');
       }
+    }
+
+    let effEvidenceType = evidenceType || 'project_repo';
+    let effVerificationStatus = 'pending_review';
+    let effSource = 'project_submission';
+
+    if (effEvidenceType === 'certification') {
+      effVerificationStatus = 'self_reported';
+      effSource = 'certification_claim';
+    } else if (effEvidenceType === 'course') {
+      effVerificationStatus = 'self_reported';
+      effSource = 'course_completion';
+    } else if (effEvidenceType === 'work_experience') {
+      effVerificationStatus = 'self_reported';
+      effSource = 'experience_claim';
     }
 
     const now = new Date().toISOString();
@@ -297,7 +313,7 @@ export const candidateService = {
             `INSERT INTO skills (
               id, domain_id, name, description, category, proficiency_scale, accepted_evidence_types, assessment_types, active, created_at, updated_at
             ) VALUES (?, ?, ?, ?, 'Technologies', '1-5', '["github_pr","project_repo","code_sample"]', '["practical_coding"]', 1, ?, ?);`,
-            [newSkillId, domainId || 'dom-fullstack', cleanSkillName, `${cleanSkillName} project competency`, now, now]
+            [newSkillId, domainId || 'dom-fullstack', cleanSkillName, `${cleanSkillName} competency`, now, now]
           );
           skillRow = { id: newSkillId };
         }
@@ -312,7 +328,8 @@ export const candidateService = {
           description: description.trim(),
           liveDemoUrl: liveDemoUrl ? liveDemoUrl.trim() : null,
           technologies: Array.isArray(technologies) ? technologies : [],
-          domainId: domainId || null
+          domainId: domainId || null,
+          evidenceType: effEvidenceType,
         });
 
         if (existingEvidence) {
@@ -328,13 +345,13 @@ export const candidateService = {
           evidenceIds.push(existingEvidence.id);
           updatedCount++;
         } else {
-          // Insert new pending evidence
+          // Insert new evidence with transparent status
           const evidenceId = `se-${uuidv4().slice(0, 8)}`;
           repo.execute(
             `INSERT INTO skill_evidence (
               id, candidate_id, skill_id, evidence_type, title, reference_url, metadata, source, verification_status, created_at, updated_at
-            ) VALUES (?, ?, ?, 'project_repo', ?, ?, ?, 'project_submission', 'pending_review', ?, ?);`,
-            [evidenceId, candidateId, skillRow.id, title.trim(), cleanRepoUrl, metadata, now, now]
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+            [evidenceId, candidateId, skillRow.id, effEvidenceType, title.trim(), cleanRepoUrl, metadata, effSource, effVerificationStatus, now, now]
           );
           evidenceIds.push(evidenceId);
           createdCount++;
@@ -347,10 +364,12 @@ export const candidateService = {
         );
 
         if (existingCS) {
-          // If self_reported, elevate to pending_review. If already verified or diagnostic_tested, retain higher status!
-          const newStatus = (existingCS.verification_status === 'self_reported' || existingCS.verification_status === 'unverified')
-            ? 'pending_review'
-            : existingCS.verification_status;
+          // If already verified or diagnostic_tested, retain higher status!
+          // Only elevate if practical project submitted
+          let newStatus = existingCS.verification_status;
+          if (effVerificationStatus === 'pending_review' && (existingCS.verification_status === 'self_reported' || existingCS.verification_status === 'unverified')) {
+            newStatus = 'pending_review';
+          }
 
           repo.execute(
             `UPDATE candidate_skills SET
@@ -363,8 +382,8 @@ export const candidateService = {
           repo.execute(
             `INSERT INTO candidate_skills (
               id, candidate_id, skill_id, proficiency, verification_status, source, notes, created_at, updated_at
-            ) VALUES (?, ?, ?, 2, 'pending_review', 'project_submission', 'Project evidence submitted, awaiting review', ?, ?);`,
-            [`cs-${uuidv4().slice(0, 8)}`, candidateId, skillRow.id, now, now]
+            ) VALUES (?, ?, ?, 2, ?, ?, 'Evidence submitted on Skill Passport', ?, ?);`,
+            [`cs-${uuidv4().slice(0, 8)}`, candidateId, skillRow.id, effVerificationStatus, effSource, now, now]
           );
         }
       }

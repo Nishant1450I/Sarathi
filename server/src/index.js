@@ -23,6 +23,7 @@ import resourceRoutes from './routes/resourceRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import feedbackRoutes from './routes/feedbackRoutes.js';
 import passportShareRoutes from './routes/passportShareRoutes.js';
+import resumeRoutes from './routes/resumeRoutes.js';
 
 // Validate configuration on startup
 validateConfig();
@@ -94,6 +95,7 @@ app.use('/api/resources', resourceRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api/passport', passportShareRoutes);
+app.use('/api/resumes', resumeRoutes);
 
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
