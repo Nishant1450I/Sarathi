@@ -9,6 +9,8 @@ export interface UserProfile {
   avatarUrl?: string;
   targetRole?: string;
   institution?: string;
+  institutionId?: string;
+  status?: 'active' | 'suspended' | 'pending_approval';
   companyName?: string;
   bio?: string;
   headline?: string;

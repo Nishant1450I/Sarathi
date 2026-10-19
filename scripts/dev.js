@@ -35,10 +35,20 @@ frontend.on('error', (err) => {
 
 function cleanup() {
   console.log('\n\x1b[33m%s\x1b[0m', 'Shutting down SARATHI services...');
-  try { backend.kill(); } catch {}
-  try { frontend.kill(); } catch {}
-  process.exit();
+  if (process.platform === 'win32') {
+    if (backend && backend.pid) {
+      try { spawn('taskkill', ['/pid', String(backend.pid), '/f', '/t']); } catch {}
+    }
+    if (frontend && frontend.pid) {
+      try { spawn('taskkill', ['/pid', String(frontend.pid), '/f', '/t']); } catch {}
+    }
+  } else {
+    try { backend.kill('SIGTERM'); } catch {}
+    try { frontend.kill('SIGTERM'); } catch {}
+  }
+  setTimeout(() => process.exit(0), 500);
 }
 
 process.on('SIGINT', cleanup);
 process.on('SIGTERM', cleanup);
+

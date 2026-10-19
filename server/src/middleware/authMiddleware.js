@@ -1,4 +1,5 @@
 import { authService } from '../services/authService.js';
+import { repository } from '../data/repository.js';
 
 export function authenticate(req, res, next) {
   const authHeader = req.headers.authorization;
@@ -11,14 +12,27 @@ export function authenticate(req, res, next) {
   if (token) {
     const decoded = authService.verifyToken(token);
     if (decoded) {
-      req.user = {
-        id: decoded.sub,
-        email: decoded.email,
-        fullName: decoded.name,
-        globalRole: decoded.globalRole,
-        orgId: decoded.orgId,
-        orgRole: decoded.orgRole,
-      };
+      // Check live status in database (a user suspended mid-session loses access)
+      const liveUser = repository.queryOne(
+        'SELECT id, status, role, institution_id FROM users WHERE id = ? AND deleted_at IS NULL;',
+        [decoded.sub]
+      );
+
+      if (liveUser && liveUser.status !== 'suspended') {
+        req.user = {
+          id: decoded.sub,
+          email: decoded.email,
+          fullName: decoded.name,
+          globalRole: liveUser.role || decoded.globalRole,
+          status: liveUser.status,
+          institutionId: liveUser.institution_id || decoded.institutionId || null,
+          orgId: decoded.orgId,
+          orgRole: decoded.orgRole,
+        };
+      } else {
+        req.user = null;
+        req.isSuspended = liveUser?.status === 'suspended';
+      }
     }
   }
 
@@ -39,8 +53,22 @@ export function authenticate(req, res, next) {
 }
 
 export function requireAuth(req, res, next) {
+  if (req.isSuspended) {
+    return res.status(403).json({
+      error: {
+        code: 'ACCOUNT_SUSPENDED',
+        message: 'Your account has been suspended. Access denied.',
+      },
+      code: 'ACCOUNT_SUSPENDED',
+      message: 'Account suspended. Access denied.',
+      errorDetail: { code: 'ACCOUNT_SUSPENDED', message: 'Your account has been suspended.' },
+    });
+  }
   if (!req.user) {
-    return res.status(401).json({ error: 'Authentication required' });
+    return res.status(401).json({
+      error: 'Authentication required',
+      errorDetail: { code: 'SESSION_EXPIRED', message: 'Authentication required' },
+    });
   }
   next();
 }

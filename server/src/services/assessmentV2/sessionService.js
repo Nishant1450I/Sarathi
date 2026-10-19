@@ -14,70 +14,115 @@ export class SessionService {
       throw new Error('Consent is required to start a Secure assessment session.');
     }
 
-    const clientQuestions = QuestionBankService.sampleQuestionsForSession(domainId, role, scope);
-    const questionIds = clientQuestions.map(q => q.id);
+    db.exec('BEGIN IMMEDIATE;');
+    try {
+      // Check if an active non-expired session already exists for this candidate
+      const existing = SessionService.getActiveSession(userId, domainId);
+      if (existing) {
+        db.exec('COMMIT;');
+        return {
+          ...existing,
+          id: existing.id || existing.sessionId,
+          sessionId: existing.sessionId || existing.id,
+          isResumed: true,
+        };
+      }
 
-    // Calculate time limit
-    const baseMinutes = scope === 'quiz_only' ? 20 : scope === 'practical_only' ? 35 : 45;
-    const multiplier = Number(accommodation?.extendedTimeMultiplier || (accommodation?.extendedTime ? 1.5 : 1.0));
-    const totalMinutes = Math.round(baseMinutes * multiplier);
+      // Retrieve question IDs from previous sessions to enforce overlap avoidance
+      const previousSessions = db.prepare(`
+        SELECT question_ids FROM assessment_sessions
+        WHERE user_id = ? AND domain_id = ?
+        ORDER BY started_at DESC LIMIT 3
+      `).all(userId, domainId);
 
-    const now = new Date();
-    const expires = new Date(now.getTime() + totalMinutes * 60 * 1000);
+      const previousQuestionIds = new Set();
+      for (const ps of previousSessions) {
+        try {
+          const ids = JSON.parse(ps.question_ids || '[]');
+          ids.forEach(id => previousQuestionIds.add(id));
+        } catch {}
+      }
 
-    const sessionId = `sess-${Date.now()}-${uuidv4().slice(0, 8)}`;
-    const startedAt = now.toISOString();
-    const expiresAt = expires.toISOString();
-    const deadlineAt = expiresAt;
+      const seed = Date.now() + Math.floor(Math.random() * 100000);
+      const clientQuestions = QuestionBankService.sampleQuestionsForSession({
+        domainId,
+        roleTitle: role,
+        scope,
+        seed,
+        previousQuestionIds: Array.from(previousQuestionIds),
+      });
+      const questionIds = clientQuestions.map(q => q.id);
 
-    const rules = {
-      timeLimitMinutes: totalMinutes,
-      pasteAllowed: mode === 'practice' || Boolean(accommodation?.disabledRestrictions || accommodation?.screenReaderMode),
-      blurTracking: mode === 'secure',
-      cameraRequired: mode === 'secure' && assessmentV2.cameraEnabled,
-      accommodationsAllowed: true,
-    };
+      // Calculate time limit
+      const baseMinutes = scope === 'quiz_only' ? 20 : scope === 'practical_only' ? 35 : 45;
+      const multiplier = Number(accommodation?.extendedTimeMultiplier || (accommodation?.extendedTime ? 1.5 : 1.0));
+      const totalMinutes = Math.round(baseMinutes * multiplier);
 
-    const sessionData = {
-      consent,
-      rules,
-      draftAnswers: {},
-    };
+      const now = new Date();
+      const expires = new Date(now.getTime() + totalMinutes * 60 * 1000);
 
-    db.prepare(`
-      INSERT INTO assessment_sessions (
-        id, user_id, mode, domain_id, role, question_ids, bank_version,
-        status, started_at, expires_at, deadline_at, save_version,
-        consent_json, accommodation_json, engine_version
-      ) VALUES (?, ?, ?, ?, ?, ?, 1, 'in_progress', ?, ?, ?, 1, ?, ?, 'v2')
-    `).run(
-      sessionId,
-      userId,
-      mode,
-      domainId,
-      role,
-      JSON.stringify(questionIds),
-      startedAt,
-      expiresAt,
-      deadlineAt,
-      JSON.stringify(sessionData),
-      JSON.stringify(accommodation)
-    );
+      const sessionId = `sess-${Date.now()}-${uuidv4().slice(0, 8)}`;
+      const startedAt = now.toISOString();
+      const expiresAt = expires.toISOString();
+      const deadlineAt = expiresAt;
 
-    return {
-      sessionId,
-      mode,
-      domainId,
-      role,
-      status: 'in_progress',
-      startedAt,
-      expiresAt,
-      deadlineAt,
-      saveVersion: 1,
-      questions: clientQuestions,
-      rules,
-      accommodation,
-    };
+      const rules = {
+        timeLimitMinutes: totalMinutes,
+        pasteAllowed: mode === 'practice' || Boolean(accommodation?.disabledRestrictions || accommodation?.screenReaderMode),
+        blurTracking: mode === 'secure',
+        cameraRequired: mode === 'secure' && assessmentV2.cameraEnabled,
+        accommodationsAllowed: true,
+      };
+
+      const sessionData = {
+        consent,
+        rules,
+        draftAnswers: {},
+        freshnessAudit: clientQuestions.audit || null,
+        questionVersions: clientQuestions.audit?.questionVersions || {},
+      };
+
+      db.prepare(`
+        INSERT INTO assessment_sessions (
+          id, user_id, mode, domain_id, role, question_ids, bank_version,
+          status, started_at, expires_at, deadline_at, save_version,
+          consent_json, accommodation_json, engine_version
+        ) VALUES (?, ?, ?, ?, ?, ?, 1, 'in_progress', ?, ?, ?, 1, ?, ?, 'v2')
+      `).run(
+        sessionId,
+        userId,
+        mode,
+        domainId,
+        role,
+        JSON.stringify(questionIds),
+        startedAt,
+        expiresAt,
+        deadlineAt,
+        JSON.stringify(sessionData),
+        JSON.stringify(accommodation)
+      );
+
+      db.exec('COMMIT;');
+
+      return {
+        id: sessionId,
+        sessionId,
+        mode,
+        domainId,
+        role,
+        status: 'in_progress',
+        startedAt,
+        expiresAt,
+        deadlineAt,
+        saveVersion: 1,
+        questions: clientQuestions,
+        rules,
+        accommodation,
+      };
+    } catch (err) {
+      try { db.exec('ROLLBACK;'); } catch {}
+      throw err;
+    }
   }
 
   /**
@@ -112,8 +157,7 @@ export class SessionService {
     let questionIds = [];
     try { questionIds = JSON.parse(session.question_ids || '[]'); } catch {}
 
-    const questions = QuestionBankService.sampleQuestionsForSession(session.domain_id);
-    const filteredQuestions = questions.filter(q => questionIds.includes(q.id));
+    const filteredQuestions = QuestionBankService.getQuestionsForClient(questionIds);
 
     let sessionData = {};
     try { sessionData = JSON.parse(session.consent_json || '{}'); } catch {}
@@ -136,12 +180,17 @@ export class SessionService {
       }
     }
 
+    const isAbandoned = Boolean(sessionData.abandoned);
+    const resolvedStatus = isAbandoned ? 'abandoned' : session.status;
+
     return {
+      id: session.id,
       sessionId: session.id,
       mode: session.mode,
       domainId: session.domain_id,
       role: session.role,
-      status: session.status,
+      status: resolvedStatus,
+      isAbandoned,
       startedAt: session.started_at,
       expiresAt: session.expires_at,
       deadlineAt: session.deadline_at || session.expires_at,
@@ -184,10 +233,19 @@ export class SessionService {
 
     const deadlineStr = session.deadline_at || session.expires_at;
     const deadlineMs = new Date(deadlineStr).getTime();
+    const now = new Date();
+    if (session.status === 'in_progress' && now.getTime() > deadlineMs) {
+      db.prepare(`UPDATE assessment_sessions SET status = 'expired' WHERE id = ?`).run(sessionId);
+      session.status = 'expired';
+    }
+
     const remainingSeconds = Math.max(0, Math.floor((deadlineMs - Date.now()) / 1000));
 
     let sessionData = {};
     try { sessionData = JSON.parse(session.consent_json || '{}'); } catch {}
+
+    const isAbandoned = Boolean(sessionData.abandoned);
+    const resolvedStatus = isAbandoned ? 'abandoned' : session.status;
 
     // Fetch latest code snapshots
     const snapshots = db.prepare(`
@@ -206,7 +264,8 @@ export class SessionService {
 
     return {
       sessionId: session.id,
-      status: session.status,
+      status: resolvedStatus,
+      isAbandoned,
       startedAt: session.started_at,
       deadlineAt: deadlineStr,
       remainingSeconds,
@@ -301,4 +360,79 @@ export class SessionService {
 
     return { success: true, snapshotId, timestamp: now };
   }
+
+  /**
+   * Find an active in-progress, non-expired session for a user
+   */
+  static getActiveSession(userId, domainId = null) {
+    const db = initDb();
+    let query = `
+      SELECT id, status, deadline_at, expires_at, started_at, domain_id, mode
+      FROM assessment_sessions
+      WHERE user_id = ? AND status = 'in_progress'
+    `;
+    const params = [userId];
+
+    if (domainId) {
+      query += ` AND domain_id = ?`;
+      params.push(domainId);
+    }
+
+    query += ` ORDER BY started_at DESC`;
+
+    const sessions = db.prepare(query).all(...params);
+    const now = new Date();
+
+    for (const s of sessions) {
+      const expires = new Date(s.deadline_at || s.expires_at);
+      if (now > expires) {
+        db.prepare(`UPDATE assessment_sessions SET status = 'expired' WHERE id = ?`).run(s.id);
+        continue;
+      }
+
+      return SessionService.getSession(s.id, userId);
+    }
+
+    return null;
+  }
+
+  /**
+   * Abandon an active session explicitly
+   */
+  static abandonSession(sessionId, userId) {
+    const db = initDb();
+    const session = db.prepare(`SELECT * FROM assessment_sessions WHERE id = ?`).get(sessionId);
+
+    if (!session) {
+      const err = new Error('Assessment session not found.');
+      err.code = 'NOT_FOUND';
+      throw err;
+    }
+
+    if (session.user_id !== userId) {
+      const err = new Error('Unauthorized to abandon this assessment session.');
+      err.code = 'FORBIDDEN';
+      throw err;
+    }
+
+    if (session.status !== 'in_progress') {
+      const err = new Error(`Cannot abandon a session with status: ${session.status}`);
+      err.code = 'INVALID_STATE';
+      throw err;
+    }
+
+    let sessionData = {};
+    try { sessionData = JSON.parse(session.consent_json || '{}'); } catch {}
+    sessionData.abandoned = true;
+    sessionData.abandonedAt = new Date().toISOString();
+
+    db.prepare(`
+      UPDATE assessment_sessions
+      SET status = 'expired', consent_json = ?
+      WHERE id = ?
+    `).run(JSON.stringify(sessionData), sessionId);
+
+    return { success: true, sessionId, status: 'abandoned' };
+  }
 }
+

@@ -28,13 +28,18 @@ export const SkillPassportPage: React.FC = () => {
     projects,
     roadmap,
     overallReadinessScore,
-    assessedSkillsCount
+    assessedSkillsCount,
+    markPassportReviewed
   } = useStudent();
 
   const [shareData, setShareData] = useState<{ publicId: string; isEnabled: boolean } | null>(null);
   const [showShareModal, setShowShareModal] = useState(false);
   const [isToggling, setIsToggling] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    markPassportReviewed();
+  }, [markPassportReviewed]);
 
   useEffect(() => {
     const fetchShare = async () => {

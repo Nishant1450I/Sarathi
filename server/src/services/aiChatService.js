@@ -117,17 +117,39 @@ export function getAuthenticatedCandidateData(candidateId) {
       [candidateId]
     );
 
-    // Recent assessments
-    const assessments = repository.query(
+    // Recent assessments (authoritative V2 + legacy V1 deduplicated)
+    let v2Assessments = [];
+    try {
+      v2Assessments = repository.query(
+        `SELECT sc.technical_score as score, 100 as max_score,
+                (sc.technical_score >= 60) as passed,
+                s.submitted_at as created_at,
+                (s.role || ' Skill Assessment') as template_title,
+                COALESCE(d.title, s.domain_id) as domain_title
+         FROM assessment_sessions s
+         JOIN session_scores sc ON sc.session_id = s.id
+         LEFT JOIN domains d ON d.id = s.domain_id
+         WHERE s.user_id = ? AND s.status IN ('graded', 'submitted')
+         ORDER BY s.submitted_at DESC
+         LIMIT 5;`,
+        [candidateId]
+      );
+    } catch {}
+
+    const v1Assessments = repository.query(
       `SELECT ar.score, ar.max_score, ar.passed, ar.created_at, at.title as template_title, d.title as domain_title
        FROM assessment_results ar
        JOIN assessment_templates at ON at.id = ar.template_id
        JOIN domains d ON d.id = at.domain_id
-       WHERE ar.candidate_id = ?
+       WHERE ar.candidate_id = ? AND ar.id NOT LIKE 'res-sess-%'
        ORDER BY ar.created_at DESC
        LIMIT 5;`,
       [candidateId]
     );
+
+    const assessments = [...(v2Assessments || []), ...(v1Assessments || [])]
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .slice(0, 5);
 
     // Recent project evidence
     const evidence = repository.query(

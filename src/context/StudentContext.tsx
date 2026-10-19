@@ -1,14 +1,15 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import type { SkillItem } from '../types/skill';
-import type { StudentRoadmap } from '../types/roadmap';
+import type { StudentRoadmap, RoadmapTask } from '../types/roadmap';
 import type { ProjectItem } from '../types/project';
 import type { SkillGapItem } from '../types/gap';
 import type { AssessmentResult } from '../types/assessment';
 import { getRoleRequirements, getDomainByRoleTitle } from '../data/domainsCatalog';
 import { initialStudentRoadmap } from '../data/mockRoadmaps';
-import { getDomainRoadmap, resolveDomainTrack, prioritizeRoadmapTasksWithGaps } from '../data/domainRoadmaps';
+import { getDomainRoadmap, resolveDomainTrack, personalizeRoadmapWithAssessmentAndGaps } from '../data/domainRoadmaps';
 import { StorageService, DEMO_STUDENT_ID } from '../services/storageService';
 import { SkillSyncService } from '../services/skillSyncService';
+import { AssessmentV2Service } from '../services/assessmentV2Service';
 import { apiClient } from '../services/apiClient';
 import { useAuth } from './AuthContext';
 
@@ -28,8 +29,16 @@ interface StudentContextType {
   assessmentHistory: AssessmentResult[];
   hasReviewedGaps: boolean;
   markGapsReviewed: () => void;
+  hasReviewedPassport: boolean;
+  markPassportReviewed: () => void;
   onboardingDismissed: boolean;
   setOnboardingDismissed: (dismissed: boolean) => void;
+  roadmapLoading: boolean;
+  roadmapError: string | null;
+  roadmapToast: { message: string; taskId?: string; actionType?: 'completed' | 'uncompleted' } | null;
+  clearRoadmapToast: () => void;
+  retryLoadRoadmap: () => void;
+  undoTaskCompletion: (taskId: string) => Promise<void>;
   generateRoadmap: (role?: string) => void;
   toggleTaskCompletion: (taskId: string) => void;
   addProject: (project: Omit<ProjectItem, 'id' | 'createdAt' | 'verificationStatus'>) => void;
@@ -49,21 +58,22 @@ const StudentContext = createContext<StudentContextType | undefined>(undefined);
 export const StudentProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, updateProfile } = useAuth();
 
-  // State loaded from isolated user storage
+  // State loaded from isolated user storage with backend profile fallback
   const [targetRole, setTargetRoleState] = useState<string>(() => {
-    return user ? StorageService.getUserTargetRole(user.id) : '';
+    return user ? StorageService.getUserTargetRole(user.id, user.targetRole) : '';
   });
 
   const [targetDomain, setTargetDomainState] = useState<string>(() => {
     if (!user) return 'web-dev';
-    const savedDomain = StorageService.getUserTargetDomain(user.id);
-    if (savedDomain) return savedDomain;
-    const userRole = StorageService.getUserTargetRole(user.id);
+    const userRole = StorageService.getUserTargetRole(user.id, user.targetRole);
+    let fallbackDomain: string | undefined;
     if (userRole) {
       const d = getDomainByRoleTitle(userRole);
-      if (d) return d.id;
+      if (d) fallbackDomain = d.id;
     }
-    return 'web-dev';
+    const savedDomain = StorageService.getUserTargetDomain(user.id, fallbackDomain);
+    if (savedDomain) return savedDomain;
+    return fallbackDomain || 'web-dev';
   });
 
   const [skills, setSkills] = useState<SkillItem[]>(() => {
@@ -98,27 +108,38 @@ export const StudentProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return user ? StorageService.getUserReviewedGaps(user.id) : false;
   });
 
+  const [hasReviewedPassport, setHasReviewedPassport] = useState<boolean>(() => {
+    return user ? StorageService.getUserPassportReviewed(user.id) : false;
+  });
+
   const [onboardingDismissed, setOnboardingDismissedState] = useState<boolean>(() => {
     return user ? StorageService.getUserOnboardingDismissed(user.id) : false;
   });
 
-  // Re-synchronize when authenticated user changes
+  const [roadmapLoading, setRoadmapLoading] = useState<boolean>(false);
+  const [roadmapError, setRoadmapError] = useState<string | null>(null);
+  const [roadmapToast, setRoadmapToast] = useState<{
+    message: string;
+    taskId?: string;
+    actionType?: 'completed' | 'uncompleted';
+  } | null>(null);
+  const [roadmapReloadToken, setRoadmapReloadToken] = useState<number>(0);
+
+  const clearRoadmapToast = () => setRoadmapToast(null);
+  const retryLoadRoadmap = () => setRoadmapReloadToken(v => v + 1);
   useEffect(() => {
     if (user) {
-      const savedRole = StorageService.getUserTargetRole(user.id);
+      const savedRole = StorageService.getUserTargetRole(user.id, user.targetRole);
       setTargetRoleState(savedRole);
 
-      const savedDomain = StorageService.getUserTargetDomain(user.id);
-      let effDomain = savedDomain || 'web-dev';
-      if (savedDomain) {
-        setTargetDomainState(savedDomain);
-      } else if (savedRole) {
+      let fallbackDomain: string | undefined;
+      if (savedRole) {
         const d = getDomainByRoleTitle(savedRole);
-        if (d) {
-          effDomain = d.id;
-          setTargetDomainState(d.id);
-        }
+        if (d) fallbackDomain = d.id;
       }
+      const savedDomain = StorageService.getUserTargetDomain(user.id, fallbackDomain);
+      const effDomain = savedDomain || fallbackDomain || 'web-dev';
+      setTargetDomainState(effDomain);
 
       const resolved = resolveDomainTrack(savedRole || effDomain);
       let userRoadmap = StorageService.getUserRoadmap(user.id, resolved.trackKey);
@@ -135,6 +156,7 @@ export const StudentProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setProjects(StorageService.getUserProjects(user.id));
       setAssessmentHistory(StorageService.getUserAssessmentHistory(user.id));
       setHasReviewedGaps(StorageService.getUserReviewedGaps(user.id));
+      setHasReviewedPassport(StorageService.getUserPassportReviewed(user.id));
       setOnboardingDismissedState(StorageService.getUserOnboardingDismissed(user.id));
     } else {
       setTargetRoleState('');
@@ -144,9 +166,10 @@ export const StudentProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setProjects([]);
       setAssessmentHistory([]);
       setHasReviewedGaps(false);
+      setHasReviewedPassport(false);
       setOnboardingDismissedState(false);
     }
-  }, [user?.id]);
+  }, [user?.id, user?.targetRole]);
 
   // Reconcile authoritative passport and verified status from SQLite backend
   useEffect(() => {
@@ -221,6 +244,41 @@ export const StudentProvider: React.FC<{ children: React.ReactNode }> = ({ child
           );
         }
       }
+
+      // 3. Reconcile genuine assessment attempts from SQLite backend
+      AssessmentV2Service.getHistory(undefined, user).then((histRes) => {
+        if (!isMounted || !histRes?.data || !Array.isArray(histRes.data)) return;
+        if (histRes.data.length > 0) {
+          setAssessmentHistory((prev) => {
+            const map = new Map<string, AssessmentResult>();
+            prev.forEach((p) => map.set(p.id, p));
+            histRes.data.forEach((item: any) => {
+              const dateStr = item.completedAt ? item.completedAt.split('T')[0] : new Date().toISOString().split('T')[0];
+              const converted: AssessmentResult = {
+                id: item.id || item.sessionId,
+                domainId: item.domainId || 'web-dev',
+                targetRole: item.role || 'Full-Stack Developer',
+                overallScore: item.score ?? item.technicalScore ?? item.overallScore ?? 0,
+                knowledgeScore: item.knowledgeScore ?? 0,
+                practicalScore: item.practicalScore ?? 0,
+                completedAt: dateStr,
+                categoryScores: [],
+                skillScores: [],
+                strengths: [],
+                improvements: [],
+                answersSummary: [],
+                practicalSummary: [],
+              };
+              map.set(converted.id, { ...(map.get(converted.id) || {}), ...converted });
+            });
+            const merged = Array.from(map.values()).sort(
+              (a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime()
+            );
+            StorageService.saveUserAssessmentHistory(user.id, merged);
+            return merged;
+          });
+        }
+      }).catch(() => {});
     });
 
     return () => {
@@ -236,14 +294,31 @@ export const StudentProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const resolved = resolveDomainTrack(targetRole || targetDomain);
     const trackKey = resolved.trackKey;
 
+    setRoadmapLoading(true);
+    setRoadmapError(null);
+
     apiClient
-      .get<{ success: boolean; data: { trackKey: string; completedTaskIds: string[] } }>(
-        `/api/roadmap?trackKey=${encodeURIComponent(trackKey)}`
-      )
+      .get<{
+        success: boolean;
+        data: {
+          trackKey: string;
+          completedTaskIds?: string[];
+          taskProgress?: Record<string, {
+            status: 'not_started' | 'in_progress' | 'completed';
+            completedAt?: string;
+            completionType?: 'self_reported' | 'verified';
+            verifiedBy?: string;
+          }>;
+        };
+      }>(`/api/roadmap?trackKey=${encodeURIComponent(trackKey)}`)
       .then((res) => {
-        if (!isMounted || !res?.data?.completedTaskIds) return;
-        const completedIds = new Set(res.data.completedTaskIds);
-        if (completedIds.size === 0) return;
+        if (!isMounted) return;
+        setRoadmapLoading(false);
+        setRoadmapError(null);
+
+        const data = res?.data;
+        const progressMap = data?.taskProgress || {};
+        const completedIds = new Set(data?.completedTaskIds || Object.keys(progressMap));
 
         setRoadmap((prev) => {
           if (!prev) return prev;
@@ -252,9 +327,21 @@ export const StudentProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
           const updatedStages = prev.stages.map((stage) => {
             const updatedTasks = stage.tasks.map((task) => {
-              const isCompleted = completedIds.has(task.id) || task.isCompleted;
+              const pDetail = progressMap[task.id];
+              const isCompleted = pDetail
+                ? pDetail.status === 'completed'
+                : completedIds.has(task.id) || task.isCompleted;
+
               if (isCompleted) completedCount++;
-              return { ...task, isCompleted };
+
+              return {
+                ...task,
+                isCompleted,
+                status: pDetail?.status || (isCompleted ? ('completed' as const) : ('not_started' as const)),
+                completedAt: pDetail?.completedAt || task.completedAt,
+                completionType: pDetail?.completionType || (isCompleted ? (task.completionType || 'self_reported') : undefined),
+                verifiedBy: pDetail?.verifiedBy || task.verifiedBy,
+              };
             });
             totalTasks += updatedTasks.length;
             return { ...stage, tasks: updatedTasks };
@@ -269,13 +356,17 @@ export const StudentProvider: React.FC<{ children: React.ReactNode }> = ({ child
         });
       })
       .catch((err) => {
+        if (!isMounted) return;
+        setRoadmapLoading(false);
         console.warn('Roadmap hydration notice:', err?.message);
+        // Do NOT reset cached progress to 0% on network error! Preserve cached roadmap.
+        setRoadmapError(err?.message || 'Unable to sync roadmap with server. Showing cached progress.');
       });
 
     return () => {
       isMounted = false;
     };
-  }, [user?.id, targetDomain, targetRole]);
+  }, [user?.id, targetDomain, targetRole, roadmapReloadToken]);
 
   // Persist state changes to user-scoped storage
   useEffect(() => {
@@ -331,9 +422,8 @@ export const StudentProvider: React.FC<{ children: React.ReactNode }> = ({ child
       } else {
         targetRoadmap = getDomainRoadmap(roleToUse || domainId, skillGaps);
       }
-    } else if (skillGaps && skillGaps.length > 0) {
-      targetRoadmap = prioritizeRoadmapTasksWithGaps(targetRoadmap, skillGaps);
     }
+    targetRoadmap = personalizeRoadmapWithAssessmentAndGaps(targetRoadmap, skillGaps, assessmentHistory, roleToUse || domainId);
 
     setRoadmap(targetRoadmap);
     if (user) {
@@ -377,9 +467,8 @@ export const StudentProvider: React.FC<{ children: React.ReactNode }> = ({ child
       } else {
         targetRoadmap = getDomainRoadmap(role || domainIdToSave || 'web-dev', skillGaps);
       }
-    } else if (skillGaps && skillGaps.length > 0) {
-      targetRoadmap = prioritizeRoadmapTasksWithGaps(targetRoadmap, skillGaps);
     }
+    targetRoadmap = personalizeRoadmapWithAssessmentAndGaps(targetRoadmap, skillGaps, assessmentHistory, role || domainIdToSave);
 
     setRoadmap(targetRoadmap);
     if (user) {
@@ -394,6 +483,13 @@ export const StudentProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
+  const markPassportReviewed = () => {
+    setHasReviewedPassport(true);
+    if (user) {
+      StorageService.setUserPassportReviewed(user.id, true);
+    }
+  };
+
   const setOnboardingDismissed = (dismissed: boolean) => {
     setOnboardingDismissedState(dismissed);
     if (user) {
@@ -405,16 +501,27 @@ export const StudentProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const generateRoadmap = (roleToGenerate?: string) => {
     const role = roleToGenerate || targetRole || targetDomain || 'Full-Stack Developer';
     const resolved = resolveDomainTrack(role);
-    const newRoadmap = getDomainRoadmap(role, skillGaps);
+    let newRoadmap = getDomainRoadmap(role, skillGaps);
+    newRoadmap = personalizeRoadmapWithAssessmentAndGaps(newRoadmap, skillGaps, assessmentHistory, role);
     setRoadmap(newRoadmap);
     if (user) {
       StorageService.saveUserRoadmap(user.id, newRoadmap, resolved.trackKey);
     }
   };
 
-  // Toggle tasks in student's roadmap
-  const toggleTaskCompletion = (taskId: string) => {
+  // Toggle tasks in student's roadmap with optimistic updates, rollback, and undo support
+  const toggleTaskCompletion = async (taskId: string) => {
     if (!roadmap) return;
+
+    let targetTask: RoadmapTask | undefined;
+    for (const stage of roadmap.stages) {
+      targetTask = stage.tasks.find(t => t.id === taskId);
+      if (targetTask) break;
+    }
+    if (!targetTask) return;
+
+    const previousRoadmap: StudentRoadmap = JSON.parse(JSON.stringify(roadmap));
+    const nextStatus = !targetTask.isCompleted;
 
     let totalTasks = 0;
     let completedTasks = 0;
@@ -422,9 +529,14 @@ export const StudentProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const updatedStages = roadmap.stages.map(stage => {
       const updatedTasks = stage.tasks.map(task => {
         if (task.id === taskId) {
-          const nextStatus = !task.isCompleted;
           if (nextStatus) completedTasks++;
-          return { ...task, isCompleted: nextStatus };
+          return {
+            ...task,
+            isCompleted: nextStatus,
+            status: nextStatus ? ('completed' as const) : ('not_started' as const),
+            completionType: nextStatus ? ('self_reported' as const) : undefined,
+            completedAt: nextStatus ? new Date().toISOString() : undefined,
+          };
         }
         if (task.isCompleted) completedTasks++;
         return task;
@@ -460,25 +572,142 @@ export const StudentProvider: React.FC<{ children: React.ReactNode }> = ({ child
       recommendedNextTaskId: nextTaskId
     };
 
+    // Optimistic UI update
     setRoadmap(updatedRoadmap);
+    setRoadmapToast({
+      message: nextStatus
+        ? `Marked "${targetTask.topic}" as completed`
+        : `Marked "${targetTask.topic}" as incomplete`,
+      taskId,
+      actionType: nextStatus ? 'completed' : 'uncompleted'
+    });
+
     if (user) {
       const resolved = resolveDomainTrack(roadmap.targetRole || targetRole);
       StorageService.saveUserRoadmap(user.id, updatedRoadmap, resolved.trackKey);
 
       if (user.role === 'student') {
-        const completedTaskIds = updatedStages
-          .flatMap(s => s.tasks)
-          .filter(t => t.isCompleted)
-          .map(t => t.id);
-
-        apiClient
-          .put('/api/roadmap', {
+        try {
+          const res = await apiClient.post<{
+            success: boolean;
+            data: {
+              trackKey: string;
+              taskProgress: Record<string, {
+                status: 'not_started' | 'in_progress' | 'completed';
+                completedAt?: string;
+                completionType?: 'self_reported' | 'verified';
+                verifiedBy?: string;
+              }>;
+              completedTaskIds: string[];
+            };
+          }>('/api/roadmap/task', {
             trackKey: resolved.trackKey,
-            completedTaskIds,
-          })
-          .catch((err) => {
-            console.warn('Failed to sync roadmap progress to backend:', err?.message);
+            taskId,
+            action: nextStatus ? 'complete' : 'uncomplete',
+            completionType: 'self_reported'
           });
+
+          if (res?.data?.taskProgress) {
+            const tp = res.data.taskProgress[taskId];
+            if (tp) {
+              setRoadmap(prev => {
+                if (!prev) return prev;
+                return {
+                  ...prev,
+                  stages: prev.stages.map(s => ({
+                    ...s,
+                    tasks: s.tasks.map(t =>
+                      t.id === taskId
+                        ? {
+                            ...t,
+                            status: tp.status,
+                            completedAt: tp.completedAt,
+                            completionType: tp.completionType,
+                            verifiedBy: tp.verifiedBy
+                          }
+                        : t
+                    )
+                  }))
+                };
+              });
+            }
+          }
+        } catch (err: any) {
+          console.error('Failed to sync task progress to backend:', err?.message);
+          // Rollback on network failure
+          setRoadmap(previousRoadmap);
+          StorageService.saveUserRoadmap(user.id, previousRoadmap, resolved.trackKey);
+          setRoadmapToast({
+            message: `Could not save changes to server. Reverted "${targetTask.topic}".`,
+            taskId: undefined
+          });
+        }
+      }
+    }
+  };
+
+  // Undo task completion with server synchronization and rollback
+  const undoTaskCompletion = async (taskId: string) => {
+    if (!roadmap) return;
+
+    let targetTask: RoadmapTask | undefined;
+    for (const stage of roadmap.stages) {
+      targetTask = stage.tasks.find(t => t.id === taskId);
+      if (targetTask) break;
+    }
+    if (!targetTask) return;
+
+    const previousRoadmap: StudentRoadmap = JSON.parse(JSON.stringify(roadmap));
+    const nextStatus = !targetTask.isCompleted;
+
+    let totalTasks = 0;
+    let completedTasks = 0;
+
+    const updatedStages = roadmap.stages.map(stage => {
+      const updatedTasks = stage.tasks.map(task => {
+        if (task.id === taskId) {
+          if (nextStatus) completedTasks++;
+          return {
+            ...task,
+            isCompleted: nextStatus,
+            status: nextStatus ? ('completed' as const) : ('not_started' as const),
+            completionType: nextStatus ? ('self_reported' as const) : undefined,
+            completedAt: nextStatus ? new Date().toISOString() : undefined,
+          };
+        }
+        if (task.isCompleted) completedTasks++;
+        return task;
+      });
+      totalTasks += updatedTasks.length;
+      return { ...stage, tasks: updatedTasks };
+    });
+
+    const overallProgress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+    const updatedRoadmap: StudentRoadmap = {
+      ...roadmap,
+      stages: updatedStages,
+      overallProgress
+    };
+
+    setRoadmap(updatedRoadmap);
+    setRoadmapToast(null);
+
+    if (user) {
+      const resolved = resolveDomainTrack(roadmap.targetRole || targetRole);
+      StorageService.saveUserRoadmap(user.id, updatedRoadmap, resolved.trackKey);
+
+      if (user.role === 'student') {
+        try {
+          await apiClient.post('/api/roadmap/task', {
+            trackKey: resolved.trackKey,
+            taskId,
+            action: 'undo'
+          });
+        } catch (err: any) {
+          console.error('Failed to undo task completion on server:', err?.message);
+          setRoadmap(previousRoadmap);
+          StorageService.saveUserRoadmap(user.id, previousRoadmap, resolved.trackKey);
+        }
       }
     }
   };
@@ -669,20 +898,73 @@ export const StudentProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return [];
     }
 
+    // Build map of prerequisite dependencies
+    const prereqBlockers = new Map<string, number>();
+    requirements.requiredSkills.forEach(req => {
+      const name = req.skillName.toLowerCase();
+      // Common foundational blockers
+      if (name.includes('html5') || name.includes('javascript') || name.includes('python')) {
+        prereqBlockers.set(name, 3);
+      } else if (name.includes('node.js') || name.includes('react.js') || name.includes('machine learning fund')) {
+        prereqBlockers.set(name, 2);
+      }
+    });
+
     return requirements.requiredSkills.map(req => {
       const studentSkill = skills.find(s => s.name.toLowerCase() === req.skillName.toLowerCase());
-      const isVerified = studentSkill && studentSkill.status !== 'self-reported';
+      const isVerified = studentSkill && (studentSkill.status === 'verified' || studentSkill.status === 'assessment-completed' || studentSkill.status === 'evidence-submitted');
       const currentProficiency = isVerified ? studentSkill.proficiencyLevel : 0;
       const gapLevel = Math.max(0, req.requiredProficiency - currentProficiency);
 
+      let gapStatus: SkillGapItem['gapStatus'] = 'EVIDENCE_NEEDED';
+      let confidence: SkillGapItem['confidence'] = 'NONE';
+      let evidenceStatus: SkillGapItem['evidenceStatus'] = 'INSUFFICIENT_EVIDENCE';
+
+      if (!isVerified || currentProficiency === 0) {
+        gapStatus = 'EVIDENCE_NEEDED';
+        confidence = 'NONE';
+        evidenceStatus = 'INSUFFICIENT_EVIDENCE';
+      } else if (currentProficiency >= req.requiredProficiency) {
+        gapStatus = 'BENCHMARK_MET';
+        confidence = studentSkill.status === 'verified' ? 'HIGH' : 'MEDIUM';
+        evidenceStatus = studentSkill.status === 'verified' ? 'VERIFIED' : 'PROVISIONAL';
+      } else if (studentSkill.status === 'verified') {
+        gapStatus = 'VERIFIED_GAP';
+        confidence = 'HIGH';
+        evidenceStatus = 'VERIFIED';
+      } else {
+        gapStatus = 'PRELIMINARY_GAP';
+        confidence = 'MEDIUM';
+        evidenceStatus = 'PROVISIONAL';
+      }
+
+      // Priority and blocker scoring
+      const blockerCount = prereqBlockers.get(req.skillName.toLowerCase()) || 0;
       let priority: 'High' | 'Medium' | 'Low' = 'Low';
-      if (gapLevel >= 3) priority = 'High';
-      else if (gapLevel >= 1) priority = 'Medium';
+      let priorityRationale = '';
+
+      if (gapLevel === 0) {
+        priority = 'Low';
+        priorityRationale = 'Competency benchmark goal met.';
+      } else if (blockerCount > 0) {
+        priority = 'High';
+        priorityRationale = `Foundational blocker: required before mastering ${blockerCount} dependent competencies.`;
+      } else if (req.importance === 'Critical' || gapLevel >= 3) {
+        priority = 'High';
+        priorityRationale = `Critical core competency with a ${gapLevel}-level gap.`;
+      } else if (gapLevel >= 1) {
+        priority = 'Medium';
+        priorityRationale = `Demonstrated proficiency is ${gapLevel} level below target benchmark.`;
+      }
 
       let recommendedAction = 'Proficiency goal met. Keep practicing through capstones.';
-      if (gapLevel >= 3) {
+      if (gapStatus === 'EVIDENCE_NEEDED') {
+        recommendedAction = blockerCount > 0
+          ? `Immediate foundational priority: Take diagnostic screening for ${req.skillName}.`
+          : `Submit repository evidence or complete diagnostic test for ${req.skillName}.`;
+      } else if (gapLevel >= 2) {
         recommendedAction = `Immediate priority: Start with foundational ${req.skillName} modules and take a diagnostic test.`;
-      } else if (gapLevel >= 1) {
+      } else if (gapLevel === 1) {
         recommendedAction = `Build a hands-on project demonstrating ${req.skillName} to verify Level ${req.requiredProficiency}.`;
       }
 
@@ -690,12 +972,17 @@ export const StudentProvider: React.FC<{ children: React.ReactNode }> = ({ child
         skillName: req.skillName,
         category: req.category,
         requiredProficiency: req.requiredProficiency,
-        currentProficiency: studentSkill ? studentSkill.proficiencyLevel : 0,
+        currentProficiency,
         gapLevel,
+        gapStatus,
+        confidence,
+        evidenceStatus,
         priority,
+        priorityRationale,
         whyItMatters: req.whyItMatters,
         recommendedAction,
-        verificationStatus: studentSkill ? studentSkill.status : 'self-reported'
+        verificationStatus: studentSkill ? studentSkill.status : 'self-reported',
+        isMandatory: req.importance === 'Critical' || blockerCount > 0
       };
     });
   }, [targetRole, skills]);
@@ -715,7 +1002,8 @@ export const StudentProvider: React.FC<{ children: React.ReactNode }> = ({ child
     );
   }, [targetRole, skills]);
 
-  // Career Readiness Score calculation
+  // Career Readiness Score calculation:
+  // Readiness = 100 * sum(weight * min(requiredLevel, demonstratedLevel)) / sum(weight * requiredLevel)
   const overallReadinessScore: number | null = useMemo(() => {
     if (!targetRole || targetRole === 'Not selected yet') {
       return null;
@@ -732,19 +1020,27 @@ export const StudentProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return null;
     }
 
-    const totalRequiredPoints = requirements.requiredSkills.reduce(
-      (acc, item) => acc + item.requiredProficiency, 0
-    );
-    if (totalRequiredPoints === 0) return null;
+    // Role-specific weighted readiness formula
+    let totalWeightedRequired = 0;
+    let earnedWeightedDemonstrated = 0;
 
-    const studentPoints = requirements.requiredSkills.reduce((acc, item) => {
+    requirements.requiredSkills.forEach(item => {
+      // Core foundational skills receive 1.5x weight
+      const isCore = item.importance === 'Critical' || item.skillName.includes('JavaScript') || item.skillName.includes('Python');
+      const weight = isCore ? 1.5 : 1.0;
+
       const studentSkill = skills.find(
         s => s.name.toLowerCase() === item.skillName.toLowerCase() && s.status !== 'self-reported'
       );
-      return acc + Math.min(item.requiredProficiency, studentSkill ? studentSkill.proficiencyLevel : 0);
-    }, 0);
+      const demonstratedLevel = studentSkill ? studentSkill.proficiencyLevel : 0;
 
-    const calculated = Math.round((studentPoints / totalRequiredPoints) * 100);
+      totalWeightedRequired += weight * item.requiredProficiency;
+      earnedWeightedDemonstrated += weight * Math.min(item.requiredProficiency, demonstratedLevel);
+    });
+
+    if (totalWeightedRequired === 0) return null;
+
+    const calculated = Math.round((earnedWeightedDemonstrated / totalWeightedRequired) * 100);
     if (calculated === 0 && assessmentHistory && assessmentHistory.length > 0) {
       return assessmentHistory[0].overallScore;
     }
@@ -769,8 +1065,16 @@ export const StudentProvider: React.FC<{ children: React.ReactNode }> = ({ child
         assessmentHistory,
         hasReviewedGaps,
         markGapsReviewed,
+        hasReviewedPassport,
+        markPassportReviewed,
         onboardingDismissed,
         setOnboardingDismissed,
+        roadmapLoading,
+        roadmapError,
+        roadmapToast,
+        clearRoadmapToast,
+        retryLoadRoadmap,
+        undoTaskCompletion,
         generateRoadmap,
         toggleTaskCompletion,
         addProject,

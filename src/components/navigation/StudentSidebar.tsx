@@ -1,15 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
-  LayoutDashboard,
-  Brain,
-  Target,
-  Map,
-  FolderGit2,
-  Briefcase,
-  Award,
-  BookOpen,
-  HelpCircle,
   User,
   Settings,
   LogOut,
@@ -17,61 +8,17 @@ import {
   GraduationCap,
   ChevronDown,
   ChevronRight,
-  FileText,
   X
 } from 'lucide-react';
 import { Logo } from '../common/Logo';
 import { useAuth } from '../../context/AuthContext';
+import {
+  studentNavSections,
+  type StudentNavItem,
+  type StudentNavSection
+} from './studentNavConfig';
 
-export interface StudentNavItem {
-  label: string;
-  path: string;
-  icon: React.ElementType;
-}
-
-export interface StudentNavSection {
-  id: string;
-  title: string;
-  items: StudentNavItem[];
-}
-
-export const studentNavSections: StudentNavSection[] = [
-  {
-    id: 'career-dashboard',
-    title: 'Career Dashboard',
-    items: [
-      { label: 'Dashboard', path: '/student/dashboard', icon: LayoutDashboard },
-      { label: 'My Profile', path: '/student/profile', icon: User },
-    ],
-  },
-  {
-    id: 'skill-intelligence',
-    title: 'Skill Intelligence',
-    items: [
-      { label: 'Skill Assessment', path: '/student/assessment', icon: Brain },
-      { label: 'Skill Gap Analysis', path: '/student/skill-gap', icon: Target },
-      { label: 'My Roadmap', path: '/student/roadmap', icon: Map },
-    ],
-  },
-  {
-    id: 'evidence-opportunities',
-    title: 'Evidence & Opportunities',
-    items: [
-      { label: 'Projects & Portfolio', path: '/student/projects', icon: FolderGit2 },
-      { label: 'Skill Passport', path: '/student/skill-passport', icon: Award },
-      { label: 'Skill Resume', path: '/student/resume', icon: FileText },
-      { label: 'Jobs & Internships', path: '/student/opportunities', icon: Briefcase },
-    ],
-  },
-  {
-    id: 'learning-growth',
-    title: 'Learning & Growth',
-    items: [
-      { label: 'Learning Library', path: '/student/resources', icon: BookOpen },
-      { label: 'Help & Support', path: '/student/help', icon: HelpCircle },
-    ],
-  },
-];
+export { studentNavSections, type StudentNavItem, type StudentNavSection };
 
 interface StudentSidebarProps {
   mobileOpen?: boolean;
@@ -216,7 +163,7 @@ export const StudentSidebar: React.FC<StudentSidebarProps> = ({
           </NavLink>
         </div>
 
-        {/* Authorized Multi-Role Switcher (only for accounts explicitly authorized for multiple roles) */}
+        {/* Authorized Multi-Role Switcher */}
         {user?.roles && user.roles.length > 1 && (
           <div className="pt-2 border-t border-slate-100 space-y-1">
             <div className="px-3 mb-1 text-[10px] font-bold text-[#405B8B] uppercase tracking-wider">
@@ -248,32 +195,48 @@ export const StudentSidebar: React.FC<StudentSidebarProps> = ({
         )}
       </div>
 
-      {/* Footer User Info & Logout */}
-      <div className="p-4 border-t border-[#E0E7F2] bg-[#F4F7FC]/50">
+      {/* Footer User Info & Logout (Bottom-Left Corner: My Profile Card & Details) */}
+      <div className="p-3 border-t border-[#E0E7F2] bg-[#F4F7FC]/70">
+        <div className="flex items-center justify-between mb-2 px-1">
+          <span className="text-[10px] font-bold text-[#405B8B] uppercase tracking-wider flex items-center gap-1.5">
+            <User className="w-3 h-3 text-[#087BFA]" />
+            My Profile
+          </span>
+          <NavLink
+            to="/student/profile"
+            onClick={onMobileClose}
+            className="text-[11px] font-bold text-[#087BFA] hover:text-[#065ec0] flex items-center gap-0.5"
+            title="View complete profile details"
+          >
+            <span>Details</span>
+            <ChevronRight className="w-3 h-3" />
+          </NavLink>
+        </div>
+
         <NavLink
           to="/student/profile"
           onClick={onMobileClose}
-          className="flex items-center gap-3 mb-3 p-1.5 -m-1.5 rounded-xl hover:bg-white/80 transition-colors group cursor-pointer"
-          title="View profile"
+          className="flex items-center gap-3 p-2 rounded-xl bg-white border border-[#E0E7F2] hover:border-[#087BFA] hover:shadow-2xs transition-all group cursor-pointer mb-2.5"
+          title="View profile details"
         >
           <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-[#087BFA] to-[#603DF5] flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-xs">
             {user?.fullName ? user.fullName.charAt(0) : 'A'}
           </div>
           <div className="flex flex-col min-w-0 flex-1">
             <span className="text-xs font-bold text-[#0B1B43] group-hover:text-[#087BFA] transition-colors truncate">
-              {user?.fullName || 'Student'}
+              {user?.fullName || 'Student Account'}
             </span>
             <span className="text-[11px] text-[#405B8B] truncate">
-              {user?.targetRole || 'View Profile'}
+              {user?.targetRole || 'Full-Stack Developer'}
             </span>
           </div>
         </NavLink>
         
         <button
           onClick={handleLogout}
-          className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold text-[#DC2626] bg-red-50 hover:bg-red-100/80 rounded-lg transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#DC2626]"
+          className="w-full flex items-center justify-center gap-2 px-3 py-1.5 text-xs font-semibold text-[#DC2626] bg-red-50 hover:bg-red-100/80 rounded-lg transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#DC2626]"
         >
-          <LogOut className="w-4 h-4" />
+          <LogOut className="w-3.5 h-3.5" />
           <span>Sign Out</span>
         </button>
       </div>

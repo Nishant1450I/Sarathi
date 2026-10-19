@@ -13,6 +13,8 @@ import { ProgressOverTime } from './ProgressOverTime';
 import { LearningMomentum } from './LearningMomentum';
 import { OpportunitiesPanel } from './OpportunitiesPanel';
 import { ReadinessExplainerModal } from './ReadinessExplainerModal';
+import { FirstRunOnboardingModal } from '../../../components/onboarding/FirstRunOnboardingModal';
+import { StorageService } from '../../../services/storageService';
 
 export const DashboardPage: React.FC = () => {
   const { user } = useAuth();
@@ -25,6 +27,7 @@ export const DashboardPage: React.FC = () => {
     projects,
     roadmap,
     hasReviewedGaps,
+    hasReviewedPassport,
     onboardingDismissed,
     setOnboardingDismissed,
     generateRoadmap,
@@ -33,6 +36,10 @@ export const DashboardPage: React.FC = () => {
 
   const [roleModalOpen, setRoleModalOpen] = useState(false);
   const [readinessExplainerOpen, setReadinessExplainerOpen] = useState(false);
+  const [firstRunModalOpen, setFirstRunModalOpen] = useState<boolean>(() => {
+    if (!user) return false;
+    return !StorageService.getUserWelcomeModalSeen(user.id);
+  });
 
   // Consolidated dashboard data hook
   const {
@@ -65,10 +72,10 @@ export const DashboardPage: React.FC = () => {
   const onboardingSteps: OnboardingStep[] = [
     { id: 1, title: 'Select Target Career Role', isDone: hasTargetRole, action: () => setRoleModalOpen(true) },
     { id: 2, title: 'Take Diagnostic Assessment', isDone: hasCompletedAssessment, path: '/student/assessment' },
-    { id: 3, title: 'Review Skill Gap Analysis', isDone: hasReviewedGaps, path: '/student/skill-gap' },
+    { id: 3, title: 'Review Skill Gap Analysis', isDone: hasCompletedAssessment && hasReviewedGaps, path: '/student/skill-gap' },
     { id: 4, title: 'Generate Personalized Roadmap', isDone: hasRoadmap, action: () => generateRoadmap() },
     { id: 5, title: 'Add Project Evidence', isDone: hasProjects, path: '/student/projects' },
-    { id: 6, title: 'Review Verified Skill Passport', isDone: Boolean(user?.institution && user?.degree), path: '/student/skill-passport' },
+    { id: 6, title: 'Review Verified Skill Passport', isDone: hasReviewedPassport, path: '/student/skill-passport' },
   ];
 
   const completedStepsCount = onboardingSteps.filter((s) => s.isDone).length;
@@ -175,6 +182,12 @@ export const DashboardPage: React.FC = () => {
           />
         </div>
       </Modal>
+
+      {/* FIRST-RUN ONBOARDING WIZARD MODAL */}
+      <FirstRunOnboardingModal
+        isOpen={firstRunModalOpen}
+        onClose={() => setFirstRunModalOpen(false)}
+      />
     </div>
   );
 };

@@ -37,14 +37,16 @@ export const LearningMomentum: React.FC<LearningMomentumProps> = ({
             <Badge variant="purple">Visuals 5 & 6</Badge>
           </h2>
           <p className="text-xs text-[#405B8B] mt-0.5">
-            Active streak of <strong>{streakDays} days</strong> with {activity.totalTasks} completed learning tasks over the last 12 weeks.
+            {streakDays > 0
+              ? `Active streak of ${streakDays} days with ${activity.totalTasks} completed learning tasks over the last 12 weeks.`
+              : 'No active learning streak yet. Complete roadmap milestones or diagnostic tasks to build your streak.'}
           </p>
         </div>
 
         <div className="flex items-center gap-2">
           <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
             <Flame className="w-4 h-4 text-amber-500 fill-amber-500" />
-            <span>{streakDays} Day Learning Streak</span>
+            <span>{streakDays > 0 ? `${streakDays} Day Learning Streak` : 'Start Your Streak'}</span>
           </span>
         </div>
       </div>

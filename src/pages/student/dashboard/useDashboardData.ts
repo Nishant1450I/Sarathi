@@ -109,14 +109,14 @@ export function useDashboardData(): DashboardData {
         ? overallReadinessScore
         : rawServerData?.kpis?.readinessScore ?? rawServerData?.summary?.readinessScore ?? 0;
 
-    const streak = rawServerData?.kpis?.streakDays ?? rawServerData?.summary?.streakDays ?? 3;
-    const hours = rawServerData?.kpis?.totalHoursLearned ?? rawServerData?.summary?.totalHoursLearned ?? 12;
+    const streak = rawServerData?.kpis?.streakDays ?? rawServerData?.summary?.streakDays ?? 0;
+    const hours = rawServerData?.kpis?.totalHoursLearned ?? rawServerData?.summary?.totalHoursLearned ?? 0;
 
     const roadmapPct = roadmap?.overallProgress ?? rawServerData?.kpis?.roadmapProgressPct ?? 0;
 
     return {
       readinessScore: currentReadiness,
-      readinessChange: rawServerData?.kpis?.readinessChange ?? 8,
+      readinessChange: rawServerData?.kpis?.readinessChange ?? rawServerData?.summary?.readinessChange ?? 0,
       verifiedSkillsCount: verifiedCount,
       highPriorityGapsCount: highGapsCount,
       roadmapProgressPct: roadmapPct,
@@ -126,7 +126,7 @@ export function useDashboardData(): DashboardData {
   }, [skills, skillGaps, overallReadinessScore, rawServerData, roadmap]);
 
   const categoryScores = useMemo(() => {
-    const fromServer = rawServerData?.categoryScores || rawServerData?.charts?.skillRadar;
+    const fromServer = rawServerData?.skillRadar || rawServerData?.categoryScores || rawServerData?.charts?.skillRadar;
     return mapSkillRadar(fromServer);
   }, [rawServerData]);
 
@@ -177,40 +177,12 @@ export function useDashboardData(): DashboardData {
     if (rawServerData?.topJobMatches && rawServerData.topJobMatches.length > 0) {
       return rawServerData.topJobMatches;
     }
-    return [
-      {
-        id: 'job-1',
-        title: 'Junior Full-Stack Engineer',
-        company: 'CloudScale Dynamics',
-        location: 'Bengaluru / Remote',
-        type: 'Full-time',
-        salary: '₹8 - 14 LPA',
-        matchScore: Math.min(95, Math.max(70, kpis.readinessScore + 5)),
-      },
-      {
-        id: 'job-2',
-        title: 'Frontend React Developer',
-        company: 'Innovate AI Labs',
-        location: 'Hyderabad / Hybrid',
-        type: 'Full-time',
-        salary: '₹7 - 12 LPA',
-        matchScore: Math.min(92, Math.max(65, kpis.readinessScore + 2)),
-      },
-      {
-        id: 'job-3',
-        title: 'Software Development Engineer - I',
-        company: 'NextGen Fintech',
-        location: 'Pune / Remote',
-        type: 'Full-time',
-        salary: '₹9 - 16 LPA',
-        matchScore: Math.min(88, Math.max(60, kpis.readinessScore - 3)),
-      },
-    ];
-  }, [rawServerData, kpis.readinessScore]);
+    // Return empty list for students without real active matches
+    return [];
+  }, [rawServerData]);
 
   const hasData = Boolean(
     assessedSkillsCount > 0 ||
-      skills.length > 0 ||
       projects.length > 0 ||
       (rawServerData?.assessmentHistory && rawServerData.assessmentHistory.length > 0)
   );

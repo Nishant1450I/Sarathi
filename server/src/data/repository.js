@@ -7,6 +7,10 @@ export const repository = {
     return stmt.all(...params);
   },
 
+  queryAll(sql, params = []) {
+    return this.query(sql, params);
+  },
+
   queryOne(sql, params = []) {
     const db = getDb();
     const stmt = db.prepare(sql);
