@@ -108,13 +108,127 @@ router.get('/my-applications', requireAuth, (req, res, next) => {
   }
 });
 
-// Recruiter: get all applications for active organization
+// Recruiter: get all applications for active organization with rich search, filters, and sort
 router.get('/applications', requireAuth, requireRole(RECRUITER_ROLES), (req, res, next) => {
   try {
     const orgId = req.user.orgId || req.orgId;
-    const { jobId, stage, search, limit, offset } = req.query;
-    const apps = pipelineService.getApplications(orgId, { jobId, stage, search, limit, offset });
+    const {
+      jobId, stage, search, skills, verifiedOnly,
+      cgpaMin, cgpaMax, gradYear, college, location,
+      minScore, maxScore, tags, sortBy, sortOrder,
+      limit, offset
+    } = req.query;
+
+    const apps = pipelineService.getApplications(orgId, {
+      jobId,
+      stage,
+      search,
+      skills,
+      verifiedOnly: verifiedOnly === 'true' || verifiedOnly === true,
+      cgpaMin,
+      cgpaMax,
+      gradYear,
+      college,
+      location,
+      minScore,
+      maxScore,
+      tags,
+      sortBy,
+      sortOrder,
+      limit,
+      offset
+    });
     res.json(apps);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Recruiter: bulk stage transitions with audit tracking
+router.patch('/applications/bulk-stage', requireAuth, requireRole(RECRUITER_ROLES), (req, res, next) => {
+  try {
+    const orgId = req.user.orgId || req.orgId;
+    const { applicationIds, targetStage, reason, actorType } = req.body;
+    if (!applicationIds || !targetStage) {
+      return res.status(400).json({ error: 'applicationIds and targetStage are required' });
+    }
+
+    const result = pipelineService.bulkUpdateStage(
+      orgId,
+      applicationIds,
+      targetStage,
+      req.user.id,
+      reason || '',
+      actorType || 'human'
+    );
+    res.json(result);
+  } catch (err) {
+    if (err.message && err.message.includes('Invalid target stage')) {
+      return res.status(400).json({ error: err.message });
+    }
+    next(err);
+  }
+});
+
+// Recruiter: bulk tag applications (add or remove)
+router.post('/applications/bulk-tag', requireAuth, requireRole(RECRUITER_ROLES), (req, res, next) => {
+  try {
+    const orgId = req.user.orgId || req.orgId;
+    const { applicationIds, tags, action } = req.body;
+    if (!applicationIds || !tags) {
+      return res.status(400).json({ error: 'applicationIds and tags are required' });
+    }
+
+    const result = pipelineService.bulkTagApplications(
+      orgId,
+      applicationIds,
+      tags,
+      action || 'add'
+    );
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Recruiter: compare 2 to 4 candidates side-by-side
+router.post('/applications/compare', requireAuth, requireRole(RECRUITER_ROLES), (req, res, next) => {
+  try {
+    const orgId = req.user.orgId || req.orgId;
+    const { applicationIds } = req.body;
+    if (!applicationIds || !Array.isArray(applicationIds)) {
+      return res.status(400).json({ error: 'applicationIds array is required' });
+    }
+
+    const result = pipelineService.compareApplications(orgId, applicationIds);
+    res.json(result);
+  } catch (err) {
+    if (err.message && err.message.includes('Compare requires')) {
+      return res.status(400).json({ error: err.message });
+    }
+    next(err);
+  }
+});
+
+// Recruiter: get 5-factor match score breakdown
+router.get('/applications/:id/match-breakdown', requireAuth, requireRole(RECRUITER_ROLES), (req, res, next) => {
+  try {
+    const orgId = req.user.orgId || req.orgId;
+    const breakdown = pipelineService.getMatchBreakdown(orgId, req.params.id);
+    if (!breakdown) return res.status(404).json({ error: 'Application not found' });
+    res.json(breakdown);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Recruiter: get stage audit history
+router.get('/applications/:id/audit', requireAuth, requireRole(RECRUITER_ROLES), (req, res, next) => {
+  try {
+    const orgId = req.user.orgId || req.orgId;
+    const audit = pipelineService.getApplicationAudit(orgId, req.params.id);
+    if (!audit) return res.status(404).json({ error: 'Application not found' });
+    res.json(audit);
   } catch (err) {
     next(err);
   }
@@ -150,7 +264,7 @@ router.post('/applications', requireAuth, requireRole(RECRUITER_ROLES), (req, re
   }
 });
 
-// Recruiter: advance or update application stage
+// Recruiter: advance or update single application stage
 router.patch('/applications/:id/stage', requireAuth, requireRole(RECRUITER_ROLES), (req, res, next) => {
   try {
     const orgId = req.user.orgId || req.orgId;
@@ -168,6 +282,37 @@ router.patch('/applications/:id/stage', requireAuth, requireRole(RECRUITER_ROLES
     if (err.message && err.message.includes('not found')) {
       return res.status(404).json({ error: err.message });
     }
+    next(err);
+  }
+});
+
+// Recruiter: saved views
+router.get('/saved-views', requireAuth, requireRole(RECRUITER_ROLES), (req, res, next) => {
+  try {
+    const orgId = req.user.orgId || req.orgId;
+    const views = pipelineService.getSavedViews(orgId, req.user.id);
+    res.json(views);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/saved-views', requireAuth, requireRole(RECRUITER_ROLES), (req, res, next) => {
+  try {
+    const orgId = req.user.orgId || req.orgId;
+    const view = pipelineService.createSavedView(orgId, req.user.id, req.body);
+    res.status(201).json(view);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete('/saved-views/:id', requireAuth, requireRole(RECRUITER_ROLES), (req, res, next) => {
+  try {
+    const orgId = req.user.orgId || req.orgId;
+    const result = pipelineService.deleteSavedView(orgId, req.user.id, req.params.id);
+    res.json(result);
+  } catch (err) {
     next(err);
   }
 });

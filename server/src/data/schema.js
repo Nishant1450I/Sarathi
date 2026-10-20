@@ -7,7 +7,7 @@
 //  - Timestamps are ISO-8601 UTC.
 //  - Multi-tenant RBAC and candidate privacy boundaries are enforced at the schema and service level.
 
-export const SCHEMA_VERSION = 10;
+export const SCHEMA_VERSION = 11;
 
 export const ddl = `
 -- ============ ORGANISATIONS ============
@@ -114,6 +114,7 @@ CREATE TABLE IF NOT EXISTS candidate_profiles (
   portfolio_url    TEXT,
   degree           TEXT,
   graduation_year  INTEGER,
+  cgpa             REAL DEFAULT 0.0,
   repo_count       INTEGER DEFAULT 0,
   visibility       TEXT NOT NULL DEFAULT 'public',
   consent_at       TEXT,
@@ -375,8 +376,31 @@ CREATE TABLE IF NOT EXISTS application_stage_history (
   from_stage     TEXT,
   to_stage       TEXT NOT NULL,
   changed_by     TEXT NOT NULL REFERENCES users(id),
+  actor_type     TEXT NOT NULL DEFAULT 'human',
   reason         TEXT,
   created_at     TEXT NOT NULL
+);
+
+-- ============ APPLICATION TAGS ============
+CREATE TABLE IF NOT EXISTS application_tags (
+  id             TEXT PRIMARY KEY,
+  application_id TEXT NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
+  tag            TEXT NOT NULL,
+  color          TEXT DEFAULT 'indigo',
+  created_at     TEXT NOT NULL,
+  UNIQUE(application_id, tag)
+);
+
+-- ============ RECRUITER SAVED VIEWS ============
+CREATE TABLE IF NOT EXISTS recruiter_saved_views (
+  id             TEXT PRIMARY KEY,
+  recruiter_id   TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  org_id         TEXT NOT NULL REFERENCES organisations(id) ON DELETE CASCADE,
+  name           TEXT NOT NULL,
+  filters_json   TEXT NOT NULL,
+  sort_json      TEXT NOT NULL,
+  created_at     TEXT NOT NULL,
+  updated_at     TEXT NOT NULL
 );
 
 -- ============ SHORTLISTS ============
@@ -842,5 +866,7 @@ CREATE INDEX IF NOT EXISTS idx_auth_nonces_exp ON auth_nonces(expires_at);
 CREATE INDEX IF NOT EXISTS idx_verif_tokens_user ON auth_verification_tokens(user_id, token_type);
 CREATE INDEX IF NOT EXISTS idx_biz_verif_org ON recruiter_business_verifications(org_id, status);
 CREATE INDEX IF NOT EXISTS idx_biz_verif_user ON recruiter_business_verifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_application_tags_app ON application_tags(application_id);
+CREATE INDEX IF NOT EXISTS idx_recruiter_saved_views_user ON recruiter_saved_views(recruiter_id, org_id);
 
 `;

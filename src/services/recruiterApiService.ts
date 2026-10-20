@@ -369,16 +369,123 @@ export interface ApplicationItem {
   candidate_id: string;
   candidate_name: string;
   candidate_email: string;
-  candidate_avatar: string;
-  headline: string;
-  target_role: string;
-  experience_years: number;
-  location: string;
+  candidate_avatar?: string;
+  institution?: string;
+  headline?: string;
+  target_role?: string;
+  experience_years?: number;
+  location?: string;
+  degree?: string;
+  graduation_year?: number;
+  cgpa?: number;
   stage: string;
   match_score: number;
   verified_skill_count: number;
+  scheduled_interviews_count?: number;
+  project_count?: number;
+  assessment_count?: number;
+  certification_count?: number;
+  assessment_score?: number | null;
+  days_in_stage?: number;
+  has_manual_override?: boolean;
+  is_below_bar?: boolean;
+  missing_must_have?: string[];
+  tags?: string[];
+  top_skills?: string[];
+  verified_skills?: string[];
+  all_skills?: string[];
   applied_at: string;
   updated_at: string;
+}
+
+export interface PipelineFilterState {
+  jobId?: string;
+  stage?: string;
+  search?: string;
+  skills?: string[];
+  verifiedOnly?: boolean;
+  cgpaMin?: number | string;
+  cgpaMax?: number | string;
+  gradYear?: number | string;
+  college?: string;
+  location?: string;
+  minScore?: number | string;
+  maxScore?: number | string;
+  tags?: string[];
+  sortBy?: 'match_score' | 'assessment_score' | 'verified_skills' | 'applied_at' | 'stage_age';
+  sortOrder?: 'asc' | 'desc';
+}
+
+export interface MatchBreakdownFactor {
+  weight: number;
+  score: number;
+  maxScore: number;
+  label: string;
+  details: string;
+}
+
+export interface MatchBreakdown {
+  applicationId: string;
+  candidateId: string;
+  jobId: string;
+  overallScore: number;
+  currentStage: string;
+  hasManualOverride: boolean;
+  overrideReason: string | null;
+  factors: {
+    verifiedSkills: MatchBreakdownFactor;
+    assessment: MatchBreakdownFactor;
+    projectRelevance: MatchBreakdownFactor;
+    educationFit: MatchBreakdownFactor;
+    learningVelocity: MatchBreakdownFactor;
+  };
+  matchedSkills: string[];
+  missingSkills: string[];
+}
+
+export interface ApplicationAuditItem {
+  id: string;
+  application_id: string;
+  from_stage: string | null;
+  to_stage: string;
+  changed_by: string;
+  changed_by_name: string;
+  actor_type: 'human' | 'rule' | 'ai';
+  reason: string;
+  created_at: string;
+}
+
+export interface CandidateComparisonItem {
+  applicationId: string;
+  candidateId: string;
+  candidateName: string;
+  candidateAvatar?: string;
+  headline?: string;
+  institution: string;
+  degree: string;
+  graduationYear: number;
+  cgpa: number;
+  location: string;
+  stage: string;
+  jobTitle: string;
+  appliedAt: string;
+  daysInStage: number;
+  matchScore: number;
+  breakdown: MatchBreakdown;
+  verifiedSkills: Array<{ id: string; name: string; category?: string; proficiency: number }>;
+  projects: Array<{ title: string; reference_url: string; metadata?: string }>;
+  assessments: Array<{ score: number; passed: number; template_title: string }>;
+  certs: Array<{ title: string; reference_url: string }>;
+  tags: string[];
+}
+
+export interface SavedViewItem {
+  id: string;
+  name: string;
+  filters: PipelineFilterState;
+  sort: { sortBy?: string; sortOrder?: string };
+  createdAt: string;
+  updatedAt: string;
 }
 
 class RecruiterApiService {
@@ -617,11 +724,36 @@ class RecruiterApiService {
   }
 
   // Pipeline
-  public getApplications(jobId?: string, stage?: string, search?: string): Promise<ApplicationItem[]> {
+  public getApplications(
+    filterOrJobId?: PipelineFilterState | string,
+    stage?: string,
+    search?: string
+  ): Promise<ApplicationItem[]> {
     const params = new URLSearchParams();
-    if (jobId) params.append('jobId', jobId);
-    if (stage) params.append('stage', stage);
-    if (search) params.append('search', search);
+
+    if (typeof filterOrJobId === 'object' && filterOrJobId !== null) {
+      const f = filterOrJobId;
+      if (f.jobId) params.append('jobId', f.jobId);
+      if (f.stage) params.append('stage', f.stage);
+      if (f.search) params.append('search', f.search);
+      if (f.skills && f.skills.length > 0) params.append('skills', f.skills.join(','));
+      if (f.verifiedOnly !== undefined) params.append('verifiedOnly', String(f.verifiedOnly));
+      if (f.cgpaMin !== undefined && f.cgpaMin !== '') params.append('cgpaMin', String(f.cgpaMin));
+      if (f.cgpaMax !== undefined && f.cgpaMax !== '') params.append('cgpaMax', String(f.cgpaMax));
+      if (f.gradYear !== undefined && f.gradYear !== '') params.append('gradYear', String(f.gradYear));
+      if (f.college) params.append('college', f.college);
+      if (f.location) params.append('location', f.location);
+      if (f.minScore !== undefined && f.minScore !== '') params.append('minScore', String(f.minScore));
+      if (f.maxScore !== undefined && f.maxScore !== '') params.append('maxScore', String(f.maxScore));
+      if (f.tags && f.tags.length > 0) params.append('tags', f.tags.join(','));
+      if (f.sortBy) params.append('sortBy', f.sortBy);
+      if (f.sortOrder) params.append('sortOrder', f.sortOrder);
+    } else {
+      if (filterOrJobId) params.append('jobId', filterOrJobId);
+      if (stage) params.append('stage', stage);
+      if (search) params.append('search', search);
+    }
+
     return this.request<ApplicationItem[]>(`/pipeline/applications?${params.toString()}`);
   }
 
@@ -629,6 +761,61 @@ class RecruiterApiService {
     return this.request<any>(`/pipeline/applications/${applicationId}/stage`, {
       method: 'PATCH',
       body: JSON.stringify({ stage, reason }),
+    });
+  }
+
+  public bulkUpdateStage(
+    applicationIds: string[],
+    targetStage: string,
+    reason?: string,
+    actorType: 'human' | 'rule' | 'ai' = 'human'
+  ): Promise<{ success: boolean; updatedCount: number; targetStage: string; previousStages: Record<string, string> }> {
+    return this.request('/pipeline/applications/bulk-stage', {
+      method: 'PATCH',
+      body: JSON.stringify({ applicationIds, targetStage, reason, actorType }),
+    });
+  }
+
+  public bulkTagApplications(
+    applicationIds: string[],
+    tags: string[],
+    action: 'add' | 'remove' = 'add'
+  ): Promise<{ success: boolean; affectedCount: number; action: string; tags: string[] }> {
+    return this.request('/pipeline/applications/bulk-tag', {
+      method: 'POST',
+      body: JSON.stringify({ applicationIds, tags, action }),
+    });
+  }
+
+  public getMatchBreakdown(applicationId: string): Promise<MatchBreakdown> {
+    return this.request<MatchBreakdown>(`/pipeline/applications/${applicationId}/match-breakdown`);
+  }
+
+  public getApplicationAudit(applicationId: string): Promise<ApplicationAuditItem[]> {
+    return this.request<ApplicationAuditItem[]>(`/pipeline/applications/${applicationId}/audit`);
+  }
+
+  public compareApplications(applicationIds: string[]): Promise<CandidateComparisonItem[]> {
+    return this.request<CandidateComparisonItem[]>('/pipeline/applications/compare', {
+      method: 'POST',
+      body: JSON.stringify({ applicationIds }),
+    });
+  }
+
+  public getSavedViews(): Promise<SavedViewItem[]> {
+    return this.request<SavedViewItem[]>('/pipeline/saved-views');
+  }
+
+  public createSavedView(data: { name: string; filters: PipelineFilterState; sort: { sortBy?: string; sortOrder?: string } }): Promise<SavedViewItem> {
+    return this.request<SavedViewItem>('/pipeline/saved-views', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  public deleteSavedView(id: string): Promise<{ success: boolean; deletedId: string }> {
+    return this.request<{ success: boolean; deletedId: string }>(`/pipeline/saved-views/${id}`, {
+      method: 'DELETE',
     });
   }
 

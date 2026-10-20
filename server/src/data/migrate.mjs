@@ -198,6 +198,24 @@ export function runMigrations(dbFile) {
         db.exec("ALTER TABLE student_roadmaps ADD COLUMN task_progress TEXT NOT NULL DEFAULT '{}';");
       }
     }
+
+    const candidateProfilesCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='candidate_profiles';").get();
+    if (candidateProfilesCheck) {
+      const cols = db.prepare("PRAGMA table_info(candidate_profiles);").all();
+      const colNames = new Set(cols.map(c => c.name));
+      if (!colNames.has('cgpa')) {
+        db.exec("ALTER TABLE candidate_profiles ADD COLUMN cgpa REAL DEFAULT 0.0;");
+      }
+    }
+
+    const stageHistoryCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='application_stage_history';").get();
+    if (stageHistoryCheck) {
+      const cols = db.prepare("PRAGMA table_info(application_stage_history);").all();
+      const colNames = new Set(cols.map(c => c.name));
+      if (!colNames.has('actor_type')) {
+        db.exec("ALTER TABLE application_stage_history ADD COLUMN actor_type TEXT NOT NULL DEFAULT 'human';");
+      }
+    }
   } catch (err) {
     console.warn('Column migration note:', err.message);
   }

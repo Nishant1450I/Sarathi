@@ -987,7 +987,7 @@ const LegacyAssessmentPage: React.FC = () => {
 };
 
 export const AssessmentPage: React.FC = () => {
-  const isV2 = import.meta.env.VITE_ASSESSMENT_V2 === 'true';
+  const isV2 = import.meta.env.VITE_ASSESSMENT_V2 !== 'false';
   const { targetDomain, targetRole } = useStudent();
 
   if (isV2) {
