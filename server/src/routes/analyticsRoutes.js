@@ -34,14 +34,27 @@ router.get('/student', requireAuth, async (req, res, next) => {
   }
 });
 
-// College Portal institution-scoped analytics (role-protected)
+// College Portal institution-scoped analytics.
+// Every /api/analytics/college* endpoint verifies the `college` role.
 router.get('/college', requireAuth, requireRole(['college', 'platform_admin']), async (req, res, next) => {
   try {
     const { collegeAnalyticsService } = await import('../services/collegeAnalyticsService.js');
     const instId = req.user.institution_id || req.query.institutionId;
     const instName = req.user.institution || req.query.institutionName || 'National Institute of Technology';
     
-    const data = collegeAnalyticsService.getCollegeAnalytics(instId, instName);
+    const allowedBranches = ['CSE', 'IT', 'AI/DS', 'ECE'];
+    const branch = allowedBranches.includes(req.query.branch) ? req.query.branch : null;
+
+    const collegeRole = req.user.collegeRole || req.user.college_role || 'admin';
+    const hodBranch = collegeRole === 'hod'
+      ? (allowedBranches.includes(req.user.branch) ? req.user.branch : null)
+      : null;
+
+    const data = collegeAnalyticsService.getCollegeAnalytics(instId, instName, {
+      branch,
+      hodBranch,
+      userRole: collegeRole,
+    });
     res.json({
       success: true,
       data,
@@ -51,8 +64,8 @@ router.get('/college', requireAuth, requireRole(['college', 'platform_admin']), 
   }
 });
 
-// Link student to college institution
-router.post('/college/link', requireAuth, async (req, res, next) => {
+// Link student to college institution (college-role protected)
+router.post('/college/link', requireAuth, requireRole(['college', 'platform_admin']), async (req, res, next) => {
   try {
     const { collegeAnalyticsService } = await import('../services/collegeAnalyticsService.js');
     const { studentId, institutionId } = req.body || {};

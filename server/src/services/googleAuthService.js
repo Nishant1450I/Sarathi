@@ -192,12 +192,20 @@ export const googleAuthService = {
       organization = repository.queryOne('SELECT id, name, slug FROM organisations WHERE id = ?;', [orgId]);
     }
 
+    const now = new Date().toISOString();
+    try {
+      repository.execute('UPDATE users SET last_login_at = ? WHERE id = ?;', [now, user.id]);
+      user.last_login_at = now;
+    } catch {}
+
     // Compute canonical redirect route based on database role
     let portalRedirect = '/student/dashboard';
     if (user.role === 'recruiter') {
       portalRedirect = '/recruiter/dashboard';
     } else if (user.role === 'college') {
       portalRedirect = '/college/dashboard';
+    } else if (user.role === 'platform_admin') {
+      portalRedirect = '/admin';
     }
 
     return {
@@ -211,6 +219,7 @@ export const googleAuthService = {
         status: user.status,
         avatarUrl: user.avatar_url,
         institutionId: user.institution_id || null,
+        lastLoginAt: user.last_login_at || now,
       },
       organization,
       portalRedirect,

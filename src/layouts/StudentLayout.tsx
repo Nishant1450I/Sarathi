@@ -39,7 +39,9 @@ export const StudentLayout: React.FC = () => {
 
   // Enforce role authorization: users without student authorization are redirected to their portal
   if (user.role !== 'student' && !user.roles?.includes('student')) {
-    const redirectPath = user.role === 'recruiter' ? '/recruiter/dashboard' : '/college/dashboard';
+    const redirectPath =
+      user.role === 'platform_admin' ? '/admin' :
+      user.role === 'recruiter' ? '/recruiter/dashboard' : '/college/dashboard';
     return <Navigate to={redirectPath} replace />;
   }
 

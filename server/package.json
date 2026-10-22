@@ -10,6 +10,8 @@
     "start": "node src/index.js",
     "migrate": "node src/data/migrate.mjs",
     "seed": "node src/seeder/seeder.mjs",
+    "seed:admin": "node src/seeder/adminSeeder.mjs",
+    "seed:admin-demo": "node src/seeder/adminDemoSeeder.mjs",
     "test": "node --test --test-concurrency=1 src/test/unit/*.test.mjs src/test/integration/*.test.mjs",
     "lint": "oxlint src"
   },

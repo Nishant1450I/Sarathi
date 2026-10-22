@@ -1,7 +1,14 @@
+import fs from 'node:fs';
 import { initDb, closeDb } from '../config/db.js';
+import { paths } from '../config/index.js';
 import { ddl, SCHEMA_VERSION } from './schema.js';
+import { ROLE_BENCHMARKS } from '../services/roleBenchmarkService.js';
+import { v4 as uuidv4 } from 'uuid';
 
 export function runMigrations(dbFile) {
+  if (paths.uploadsDir && !fs.existsSync(paths.uploadsDir)) {
+    fs.mkdirSync(paths.uploadsDir, { recursive: true });
+  }
   const db = initDb(dbFile);
   console.log(`Starting migration to schema version ${SCHEMA_VERSION}...`);
 
@@ -160,6 +167,21 @@ export function runMigrations(dbFile) {
       if (!colNames.has('institution_id')) {
         db.exec("ALTER TABLE users ADD COLUMN institution_id TEXT;");
       }
+      if (!colNames.has('last_login_at')) {
+        db.exec("ALTER TABLE users ADD COLUMN last_login_at TEXT;");
+      }
+      if (!colNames.has('email_verified')) {
+        db.exec("ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 1;");
+      }
+    }
+
+    const cpCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='candidate_profiles';").get();
+    if (cpCheck) {
+      const cols = db.prepare("PRAGMA table_info(candidate_profiles);").all();
+      const colNames = new Set(cols.map(c => c.name));
+      if (!colNames.has('branch')) {
+        db.exec("ALTER TABLE candidate_profiles ADD COLUMN branch TEXT;");
+      }
     }
 
     const roadmapsCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='student_roadmaps';").get();
@@ -170,12 +192,149 @@ export function runMigrations(dbFile) {
         db.exec("ALTER TABLE student_roadmaps ADD COLUMN task_progress TEXT NOT NULL DEFAULT '{}';");
       }
     }
+
+    const orgsCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='organisations';").get();
+    if (orgsCheck) {
+      const cols = db.prepare("PRAGMA table_info(organisations);").all();
+      const colNames = new Set(cols.map(c => c.name));
+      if (!colNames.has('verification_status')) {
+        db.exec("ALTER TABLE organisations ADD COLUMN verification_status TEXT NOT NULL DEFAULT 'unverified';");
+      }
+    }
+
+    const auditCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='admin_audit_log';").get();
+    if (auditCheck) {
+      const cols = db.prepare("PRAGMA table_info(admin_audit_log);").all();
+      const colNames = new Set(cols.map(c => c.name));
+      if (!colNames.has('prev_hash')) {
+        db.exec("ALTER TABLE admin_audit_log ADD COLUMN prev_hash TEXT;");
+      }
+      if (!colNames.has('hash')) {
+        db.exec("ALTER TABLE admin_audit_log ADD COLUMN hash TEXT;");
+      }
+    }
+
+    const skillsCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='skills';").get();
+    if (skillsCheck) {
+      const cols = db.prepare("PRAGMA table_info(skills);").all();
+      const colNames = new Set(cols.map(c => c.name));
+      if (!colNames.has('is_archived')) {
+        db.exec("ALTER TABLE skills ADD COLUMN is_archived INTEGER NOT NULL DEFAULT 0;");
+      }
+    }
+
+    const lrCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='learning_resources';").get();
+    if (lrCheck) {
+      const cols = db.prepare("PRAGMA table_info(learning_resources);").all();
+      const colNames = new Set(cols.map(c => c.name));
+      if (!colNames.has('is_archived')) {
+        db.exec("ALTER TABLE learning_resources ADD COLUMN is_archived INTEGER NOT NULL DEFAULT 0;");
+      }
+      if (!colNames.has('link_status')) {
+        db.exec("ALTER TABLE learning_resources ADD COLUMN link_status TEXT NOT NULL DEFAULT 'untested';");
+      }
+      if (!colNames.has('last_checked_at')) {
+        db.exec("ALTER TABLE learning_resources ADD COLUMN last_checked_at TEXT;");
+      }
+      if (!colNames.has('link_status_code')) {
+        db.exec("ALTER TABLE learning_resources ADD COLUMN link_status_code INTEGER;");
+      }
+    }
   } catch (err) {
     console.warn('Column migration note:', err.message);
   }
 
   // Execute canonical DDL
   db.exec(ddl);
+
+  // Seed default role benchmarks if empty
+  try {
+    const rbCount = db.prepare("SELECT COUNT(*) as count FROM role_benchmarks;").get()?.count || 0;
+    if (rbCount === 0 && ROLE_BENCHMARKS) {
+      const now = new Date().toISOString();
+      const insertRb = db.prepare(`
+        INSERT OR IGNORE INTO role_benchmarks (id, role_id, title, domain_id, description, benchmark_version, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+      `);
+      const insertSkill = db.prepare(`
+        INSERT OR IGNORE INTO skills (id, domain_id, name, description, category, proficiency_scale, accepted_evidence_types, assessment_types, active, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, '1-5', '["assessment", "project", "work_experience"]', '["mcq", "coding_challenge"]', 1, ?, ?);
+      `);
+      const insertRbs = db.prepare(`
+        INSERT OR IGNORE INTO role_benchmark_skills (id, benchmark_id, skill_id, target_level, weight, is_mandatory, prerequisites_json, why_it_matters)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+      `);
+
+      for (const [title, bm] of Object.entries(ROLE_BENCHMARKS)) {
+        const rbId = `rb-${uuidv4()}`;
+        const roleId = title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+        let domainId = bm.domainId || 'dom-frontend';
+        const dCheck = db.prepare("SELECT id FROM domains WHERE id = ?;").get(domainId);
+        if (!dCheck) domainId = 'dom-frontend';
+
+        insertRb.run(rbId, roleId, bm.roleTitle || title, domainId, bm.description || '', bm.benchmarkVersion || '2026.1', now, now);
+
+        if (Array.isArray(bm.requiredSkills)) {
+          for (const s of bm.requiredSkills) {
+            insertSkill.run(s.skillId, domainId, s.skillName, s.whyItMatters || '', s.category || 'General', now, now);
+            insertRbs.run(
+              `rbs-${uuidv4()}`,
+              rbId,
+              s.skillId,
+              s.requiredProficiency || 3,
+              s.weight || 1.0,
+              s.isMandatory ? 1 : 0,
+              JSON.stringify(s.prerequisites || []),
+              s.whyItMatters || ''
+            );
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Role benchmarks seed note:', err.message);
+  }
+
+  // Seed default feature flags if empty
+  try {
+    const flagCount = db.prepare("SELECT COUNT(*) as count FROM feature_flags;").get()?.count || 0;
+    if (flagCount === 0) {
+      const now = new Date().toISOString();
+      const insertFlag = db.prepare(`
+        INSERT OR IGNORE INTO feature_flags (key, enabled, description, updated_by, updated_at)
+        VALUES (?, ?, ?, NULL, ?);
+      `);
+      insertFlag.run('signups_open', 1, 'Allow new user registration', now);
+      insertFlag.run('recruiter_requires_verification', 1, 'Require company verification before recruiter actions', now);
+      insertFlag.run('assessment_engine', 1, 'Enable adaptive assessment engine', now);
+      insertFlag.run('camera_proctoring', 1, 'Enable camera proctoring during assessments', now);
+      insertFlag.run('ai_copilot', 1, 'Enable Admin Copilot AI features', now);
+      insertFlag.run('ai_chatbot', 1, 'Enable student/recruiter AI assistant chatbot', now);
+      insertFlag.run('maintenance_mode', 0, 'Platform maintenance mode (blocks non-admin traffic)', now);
+    }
+  } catch (err) {
+    console.warn('Feature flags seed note:', err.message);
+  }
+
+  // Seed support canned responses if empty
+  try {
+    const cannedCount = db.prepare("SELECT COUNT(*) as count FROM support_canned_responses;").get()?.count || 0;
+    if (cannedCount === 0) {
+      const now = new Date().toISOString();
+      const insertCanned = db.prepare(`
+        INSERT OR IGNORE INTO support_canned_responses (id, title, body, created_by, created_at)
+        VALUES (?, ?, ?, 'usr-admin-seed', ?);
+      `);
+      insertCanned.run('can-1', 'Document Unreadable', 'The uploaded verification document is blurry or unreadable. Please upload a clear PDF or high-resolution image of your Certificate of Incorporation or GST certificate.', now);
+      insertCanned.run('can-2', 'Name Mismatch', 'The organisation name on your submission does not match the legal name on the registration documents. Please re-submit with matching official details.', now);
+      insertCanned.run('can-3', 'Tax ID Verification Failed', 'We could not verify the provided GSTIN or PAN against official records. Please ensure the identifier is valid and active.', now);
+      insertCanned.run('can-4', 'Personal Email Used', 'Please use your corporate work email (e.g. name@company.com) for company verification rather than a free email provider.', now);
+      insertCanned.run('can-5', 'Assessment Score Invalidation', 'Your test session was flagged for multiple integrity violations. The associated score has been marked invalid following reviewer confirmation.', now);
+      insertCanned.run('can-6', 'General Support Inquiry', 'Thank you for contacting Sarathi Support. We have received your inquiry and our team is investigating. You will receive an update shortly.', now);
+    }
+  } catch (err) {
+    console.warn('Canned responses seed note:', err.message);
+  }
 
   // Record migration
   db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?);')

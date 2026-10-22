@@ -1,4 +1,4 @@
-export type UserRole = 'student' | 'recruiter' | 'college';
+export type UserRole = 'student' | 'recruiter' | 'college' | 'platform_admin';
 
 export interface UserProfile {
   id: string;
@@ -6,6 +6,7 @@ export interface UserProfile {
   fullName: string;
   role: UserRole;
   roles?: UserRole[];
+  lastLoginAt?: string;
   avatarUrl?: string;
   targetRole?: string;
   institution?: string;

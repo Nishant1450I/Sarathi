@@ -13,6 +13,10 @@ export const FloatingChatbot: React.FC = () => {
     setIsOpen(prev => !prev);
   };
 
+  if (location.pathname.startsWith('/admin')) {
+    return null;
+  }
+
   return (
     <aside
       className="no-print relative z-50"

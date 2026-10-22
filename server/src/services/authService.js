@@ -21,6 +21,7 @@ export const authService = {
       globalRole: user.role,
       status: user.status || 'active',
       institutionId: user.institution_id || null,
+      institution: user.institution || null,
       orgId: orgId || null,
       orgRole: role || null,
     };
@@ -54,8 +55,12 @@ export const authService = {
     }
 
     let searchEmail = (email || '').toLowerCase().trim();
-    if (authConfig.enableDemoAuth && (searchEmail === 'recruiter@nextech.com' || searchEmail === 'recruiter@sarathi.local')) {
-      searchEmail = 'recruiter@sarathi.ai';
+    if (authConfig.enableDemoAuth) {
+      if (searchEmail === 'recruiter@nextech.com' || searchEmail === 'recruiter@sarathi.local') {
+        searchEmail = 'recruiter@sarathi.ai';
+      } else if (searchEmail === 'placement@nit.edu' || searchEmail === 'college@sarathi.ai' || searchEmail === 'placement@apex.edu') {
+        searchEmail = 'admin@apex.edu';
+      }
     }
 
     let user = repository.queryOne(
@@ -121,6 +126,12 @@ export const authService = {
     const orgRole = membership?.role || null;
     const token = this.generateToken(user, orgId, orgRole);
 
+    const now = new Date().toISOString();
+    try {
+      repository.execute('UPDATE users SET last_login_at = ? WHERE id = ?;', [now, user.id]);
+      user.last_login_at = now;
+    } catch {}
+
     return {
       token,
       user: {
@@ -133,6 +144,7 @@ export const authService = {
         institution: user.institution,
         institutionId: user.institution_id || null,
         avatarUrl: user.avatar_url,
+        lastLoginAt: user.last_login_at || now,
       },
       organization: membership ? {
         id: membership.org_id,
@@ -146,19 +158,31 @@ export const authService = {
     if (!email || !password) {
       throw new Error('Email and password are required');
     }
+    if (role === 'platform_admin' || role === 'admin') {
+      const err = new Error('Platform administrator accounts cannot be created via public registration. Administrator accounts must be invited by an existing platform administrator.');
+      err.statusCode = 403;
+      err.code = 'ADMIN_SIGNUP_FORBIDDEN';
+      throw err;
+    }
     const cleanEmail = email.toLowerCase().trim();
     const cleanName = (fullName || cleanEmail.split('@')[0].replace(/[._-]/g, ' ')).trim();
     const mappedDbRole = role === 'recruiter' ? 'recruiter' : (role === 'college' ? 'college' : 'candidate');
     const now = new Date().toISOString();
     const passwordHash = await this.hashPassword(password);
 
-    repository.transaction((repo) => {
+    return repository.transaction((repo) => {
       const existing = repo.queryOne(
         'SELECT * FROM users WHERE email = ? AND deleted_at IS NULL;',
         [cleanEmail]
       );
 
       if (existing) {
+        if (existing.role === 'platform_admin') {
+          const err = new Error('Platform administrator accounts cannot be registered, overwritten, or modified via public signup.');
+          err.statusCode = 403;
+          err.code = 'ADMIN_ACCOUNT_PROTECTED';
+          throw err;
+        }
         if (!existing.password_hash || authConfig.enableDemoAuth) {
           repo.execute(
             'UPDATE users SET full_name = ?, password_hash = ?, updated_at = ? WHERE id = ?;',
@@ -213,7 +237,7 @@ export const authService = {
 
   async getUserById(userId) {
     return repository.queryOne(
-      'SELECT id, email, full_name, role, company_name, institution, timezone, avatar_url, created_at FROM users WHERE id = ?;',
+      'SELECT id, email, full_name, role, status, company_name, institution, timezone, avatar_url, last_login_at, created_at FROM users WHERE id = ?;',
       [userId]
     );
   },
@@ -371,6 +395,13 @@ export const authService = {
         'SELECT * FROM users WHERE email = ? AND deleted_at IS NULL;',
         [cleanEmail]
       );
+
+      if (existingUser && existingUser.role === 'platform_admin') {
+        const err = new Error('Platform administrator accounts cannot be accessed via Google SSO. Please sign in with administrator credentials.');
+        err.statusCode = 403;
+        err.code = 'ADMIN_SSO_FORBIDDEN';
+        throw err;
+      }
 
       let userId;
       if (!existingUser) {

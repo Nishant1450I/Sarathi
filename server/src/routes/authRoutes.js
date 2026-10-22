@@ -4,14 +4,14 @@ import { authService } from '../services/authService.js';
 import { googleAuthService } from '../services/googleAuthService.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
 import { validateBody } from '../middleware/validate.js';
-import { createAuthRateLimiter } from '../middleware/rateLimiter.js';
+import { createAuthRateLimiter, clearRateLimit } from '../middleware/rateLimiter.js';
 import { auth as authConfig, app as appConfig, google as googleConfig } from '../config/index.js';
 import { repository } from '../data/repository.js';
 
 const router = Router();
 
-const loginLimiter = createAuthRateLimiter({ prefix: 'login', maxAttempts: 10, windowMs: 15 * 60 * 1000 });
-const googleLimiter = createAuthRateLimiter({ prefix: 'google', maxAttempts: 10, windowMs: 15 * 60 * 1000 });
+const loginLimiter = createAuthRateLimiter({ prefix: 'login', maxAttempts: 20, windowMs: 15 * 60 * 1000 });
+const googleLimiter = createAuthRateLimiter({ prefix: 'google', maxAttempts: 20, windowMs: 15 * 60 * 1000 });
 const recoveryLimiter = createAuthRateLimiter({ prefix: 'recovery', maxAttempts: 10, windowMs: 15 * 60 * 1000 });
 
 const changePasswordSchema = z.object({
@@ -38,6 +38,18 @@ router.get('/mode', (req, res) => {
     activeDatabase: 'sqlite',
   });
 });
+
+// Demo-only: clears in-memory rate-limit counters so the admin auto-login
+// page isn't blocked after repeated dev restarts / failed attempts.
+router.post('/clear-rate-limit', (req, res) => {
+  if (appConfig.mode !== 'demo') {
+    return res.status(403).json({ error: 'Only available in demo mode' });
+  }
+  const { prefix } = req.body || {};
+  clearRateLimit(prefix || null);
+  res.json({ ok: true, message: 'Rate limit cleared' });
+});
+
 
 router.post('/login', loginLimiter, async (req, res, next) => {
   try {
@@ -71,8 +83,19 @@ router.post('/login', loginLimiter, async (req, res, next) => {
   }
 });
 
+import { featureFlagService } from '../services/admin/featureFlagService.js';
+
 router.post('/register', async (req, res, next) => {
   try {
+    if (!featureFlagService.isEnabled('signups_open', true)) {
+      return res.status(403).json({
+        error: {
+          code: 'SIGNUPS_CLOSED',
+          message: 'User registration is temporarily closed for platform maintenance.',
+        },
+      });
+    }
+
     const { email, password, fullName, role } = req.body || {};
     if (!email || !password) {
       return res.status(400).json({
@@ -81,6 +104,16 @@ router.post('/register', async (req, res, next) => {
         message: 'Email and password are required',
       });
     }
+
+    if (role === 'platform_admin' || role === 'admin') {
+      return res.status(403).json({
+        error: {
+          code: 'ADMIN_SIGNUP_FORBIDDEN',
+          message: 'Platform administrator accounts cannot be created via public registration. Administrator accounts must be provisioned or invited by an existing platform administrator.',
+        },
+      });
+    }
+
     const result = await authService.register({ email, password, fullName, role });
     res.json(result);
   } catch (err) {

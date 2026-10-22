@@ -7,6 +7,18 @@ const attemptsMap = new Map();
 const DEFAULT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 const DEFAULT_MAX_ATTEMPTS = 10;
 
+import { app as appConfig } from '../config/index.js';
+
+const DEMO_EXEMPT_EMAILS = new Set([
+  'admin@sarathi.dev',
+  'recruiter@sarathi.ai',
+  'student@sarathi.ai',
+  'admin@apex.edu',
+  'alex.morgan@sarathi.dev',
+  'vikram.mehta@sarathi.ai',
+  'priya.sharma@sarathi.ai',
+]);
+
 /**
  * Creates an Express middleware for rate-limiting auth endpoints.
  * @param {object} options
@@ -25,6 +37,16 @@ export function createAuthRateLimiter({
     const key = `${prefix}:${ip}:${email || 'general'}`;
     const now = Date.now();
 
+    // In demo/development mode, exempt standard demo accounts and relax limits
+    const isDemoMode = appConfig.mode === 'demo' || appConfig.env !== 'production';
+    if (isDemoMode && DEMO_EXEMPT_EMAILS.has(email)) {
+      req.recordAuthFailure = () => {};
+      req.recordAuthSuccess = () => {};
+      return next();
+    }
+
+    const effectiveMaxAttempts = isDemoMode ? Math.max(maxAttempts, 100) : maxAttempts;
+
     const record = attemptsMap.get(key) || { count: 0, resetAt: now + windowMs };
 
     if (now > record.resetAt) {
@@ -32,7 +54,7 @@ export function createAuthRateLimiter({
       record.resetAt = now + windowMs;
     }
 
-    if (record.count >= maxAttempts) {
+    if (record.count >= effectiveMaxAttempts) {
       const retryAfterSeconds = Math.max(1, Math.ceil((record.resetAt - now) / 1000));
       res.setHeader('Retry-After', retryAfterSeconds);
       return res.status(429).json({
@@ -74,9 +96,35 @@ export function clearRateLimit(keyPrefix) {
     attemptsMap.clear();
     return;
   }
+  const cleanPrefix = keyPrefix.toLowerCase().trim();
   for (const key of attemptsMap.keys()) {
-    if (key.startsWith(keyPrefix)) {
+    if (key.toLowerCase().startsWith(cleanPrefix) || key.toLowerCase().includes(cleanPrefix)) {
       attemptsMap.delete(key);
     }
   }
 }
+
+/**
+ * Creates an admin sliding window rate limiter (default 120 req/min per admin/IP).
+ */
+export function createAdminRateLimiter({ windowMs = 60 * 1000, maxRequests = 120 } = {}) {
+  const requests = new Map();
+
+  return function adminRateLimiter(req, res, next) {
+    const key = req.user?.id || req.ip || 'anon-admin';
+    const now = Date.now();
+    const timestamps = (requests.get(key) || []).filter((t) => now - t < windowMs);
+
+    if (timestamps.length >= maxRequests) {
+      return res.status(429).json({
+        error: 'Too many administrative requests. Please slow down.',
+        code: 'ADMIN_RATE_LIMITED',
+      });
+    }
+
+    timestamps.push(now);
+    requests.set(key, timestamps);
+    next();
+  };
+}
+

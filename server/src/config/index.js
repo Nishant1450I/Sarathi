@@ -24,7 +24,7 @@ export const app = {
 export const auth = {
   secret: process.env.JWT_SECRET || (process.env.NODE_ENV === 'production' ? null : 'sarathi-dev-secret-change-me'),
   expiresIn: process.env.JWT_EXPIRES_IN || '7d',
-  enableDemoAuth: (process.env.ENABLE_DEMO_AUTH === 'true' || process.env.APP_MODE === 'demo') && process.env.NODE_ENV !== 'production' && process.env.APP_MODE !== 'production',
+  enableDemoAuth: (process.env.ENABLE_DEMO_AUTH === 'true' || process.env.APP_MODE === 'demo' || !process.env.NODE_ENV || process.env.NODE_ENV === 'development') && process.env.NODE_ENV !== 'production' && process.env.APP_MODE !== 'production',
 };
 
 export const google = {
@@ -67,6 +67,7 @@ export const tenant = {
 export const paths = {
   dataDir: resolve(root, 'data'),
   dbFile: resolve(root, 'data', 'database.db'),
+  uploadsDir: resolve(root, 'data', 'uploads'),
 };
 
 export const corsOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173').split(',').map((u) => u.trim());

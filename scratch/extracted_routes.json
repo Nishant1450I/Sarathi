@@ -1,0 +1,1654 @@
+[
+  {
+    "method": "GET",
+    "path": "/api/auth/mode",
+    "file": "authRoutes.js",
+    "roles": "Public / Unauthenticated",
+    "line": 31
+  },
+  {
+    "method": "POST",
+    "path": "/api/auth/clear-rate-limit",
+    "file": "authRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 44
+  },
+  {
+    "method": "POST",
+    "path": "/api/auth/login",
+    "file": "authRoutes.js",
+    "roles": "Public / Unauthenticated",
+    "line": 54
+  },
+  {
+    "method": "POST",
+    "path": "/api/auth/register",
+    "file": "authRoutes.js",
+    "roles": "Public / Unauthenticated",
+    "line": 88
+  },
+  {
+    "method": "GET",
+    "path": "/api/auth/google/nonce",
+    "file": "authRoutes.js",
+    "roles": "Public / Unauthenticated",
+    "line": 125
+  },
+  {
+    "method": "POST",
+    "path": "/api/auth/google",
+    "file": "authRoutes.js",
+    "roles": "Public / Unauthenticated",
+    "line": 131
+  },
+  {
+    "method": "POST",
+    "path": "/api/auth/google/link",
+    "file": "authRoutes.js",
+    "roles": "Public / Unauthenticated",
+    "line": 183
+  },
+  {
+    "method": "POST",
+    "path": "/api/auth/student-session",
+    "file": "authRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 203
+  },
+  {
+    "method": "POST",
+    "path": "/api/auth/recruiter-session",
+    "file": "authRoutes.js",
+    "roles": "recruiter, hiring_manager",
+    "line": 243
+  },
+  {
+    "method": "POST",
+    "path": "/api/auth/logout",
+    "file": "authRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 277
+  },
+  {
+    "method": "GET",
+    "path": "/api/auth/me",
+    "file": "authRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 281
+  },
+  {
+    "method": "POST",
+    "path": "/api/auth/change-password",
+    "file": "authRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 310
+  },
+  {
+    "method": "POST",
+    "path": "/api/auth/forgot-password",
+    "file": "authRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 320
+  },
+  {
+    "method": "POST",
+    "path": "/api/auth/reset-password",
+    "file": "authRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 330
+  },
+  {
+    "method": "GET",
+    "path": "/api/taxonomy/domains",
+    "file": "taxonomyRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 7
+  },
+  {
+    "method": "GET",
+    "path": "/api/taxonomy/skills",
+    "file": "taxonomyRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 16
+  },
+  {
+    "method": "POST",
+    "path": "/api/taxonomy/skills",
+    "file": "taxonomyRoutes.js",
+    "roles": "platform_admin",
+    "line": 34
+  },
+  {
+    "method": "GET",
+    "path": "/api/jobs",
+    "file": "jobRoutes.js",
+    "roles": "platform_admin",
+    "line": 9
+  },
+  {
+    "method": "GET",
+    "path": "/api/jobs/public",
+    "file": "jobRoutes.js",
+    "roles": "Public / Unauthenticated",
+    "line": 20
+  },
+  {
+    "method": "GET",
+    "path": "/api/jobs/public/:id",
+    "file": "jobRoutes.js",
+    "roles": "Public / Unauthenticated",
+    "line": 30
+  },
+  {
+    "method": "GET",
+    "path": "/api/jobs/:id",
+    "file": "jobRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 42
+  },
+  {
+    "method": "POST",
+    "path": "/api/jobs",
+    "file": "jobRoutes.js",
+    "roles": "platform_admin",
+    "line": 55
+  },
+  {
+    "method": "PUT",
+    "path": "/api/jobs/:id",
+    "file": "jobRoutes.js",
+    "roles": "platform_admin",
+    "line": 64
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/jobs/:id",
+    "file": "jobRoutes.js",
+    "roles": "platform_admin",
+    "line": 73
+  },
+  {
+    "method": "GET",
+    "path": "/api/candidates/profile",
+    "file": "candidateRoutes.js",
+    "roles": "platform_admin",
+    "line": 30
+  },
+  {
+    "method": "PUT",
+    "path": "/api/candidates/profile",
+    "file": "candidateRoutes.js",
+    "roles": "candidate",
+    "line": 48
+  },
+  {
+    "method": "POST",
+    "path": "/api/candidates/github/import",
+    "file": "candidateRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 68
+  },
+  {
+    "method": "GET",
+    "path": "/api/candidates",
+    "file": "candidateRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 86
+  },
+  {
+    "method": "GET",
+    "path": "/api/candidates/my-passport",
+    "file": "candidateRoutes.js",
+    "roles": "candidate",
+    "line": 124
+  },
+  {
+    "method": "POST",
+    "path": "/api/candidates/evidence",
+    "file": "candidateRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 146
+  },
+  {
+    "method": "GET",
+    "path": "/api/candidates/:id/passport",
+    "file": "candidateRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 187
+  },
+  {
+    "method": "POST",
+    "path": "/api/candidates/:id/match",
+    "file": "candidateRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 200
+  },
+  {
+    "method": "POST",
+    "path": "/api/candidates/:id/gap-analysis",
+    "file": "candidateRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 213
+  },
+  {
+    "method": "POST",
+    "path": "/api/candidates/compare",
+    "file": "candidateRoutes.js",
+    "roles": "candidate",
+    "line": 226
+  },
+  {
+    "method": "GET",
+    "path": "/api/verifications/pending",
+    "file": "verificationRoutes.js",
+    "roles": "platform_admin",
+    "line": 9
+  },
+  {
+    "method": "POST",
+    "path": "/api/verifications/review",
+    "file": "verificationRoutes.js",
+    "roles": "platform_admin",
+    "line": 20
+  },
+  {
+    "method": "POST",
+    "path": "/api/verifications/request",
+    "file": "verificationRoutes.js",
+    "roles": "platform_admin",
+    "line": 37
+  },
+  {
+    "method": "GET",
+    "path": "/api/assessments/templates",
+    "file": "assessmentRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 8
+  },
+  {
+    "method": "GET",
+    "path": "/api/assessments/assignments",
+    "file": "assessmentRoutes.js",
+    "roles": "platform_admin",
+    "line": 20
+  },
+  {
+    "method": "POST",
+    "path": "/api/assessments/assign",
+    "file": "assessmentRoutes.js",
+    "roles": "platform_admin",
+    "line": 31
+  },
+  {
+    "method": "POST",
+    "path": "/api/assessments/record-result",
+    "file": "assessmentRoutes.js",
+    "roles": "platform_admin",
+    "line": 48
+  },
+  {
+    "method": "POST",
+    "path": "/api/assessments/student-submit",
+    "file": "assessmentRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 67
+  },
+  {
+    "method": "GET",
+    "path": "/api/assessments/my-history",
+    "file": "assessmentRoutes.js",
+    "roles": "candidate",
+    "line": 126
+  },
+  {
+    "method": "POST",
+    "path": "/api/assessments/v2/sessions",
+    "file": "assessmentV2Routes.js",
+    "roles": "Any Authenticated",
+    "line": 43
+  },
+  {
+    "method": "GET",
+    "path": "/api/assessments/v2/sessions/active",
+    "file": "assessmentV2Routes.js",
+    "roles": "Any Authenticated",
+    "line": 79
+  },
+  {
+    "method": "POST",
+    "path": "/api/assessments/v2/sessions/:id/abandon",
+    "file": "assessmentV2Routes.js",
+    "roles": "Any Authenticated",
+    "line": 95
+  },
+  {
+    "method": "GET",
+    "path": "/api/assessments/v2/sessions/latest-result",
+    "file": "assessmentV2Routes.js",
+    "roles": "Any Authenticated",
+    "line": 114
+  },
+  {
+    "method": "GET",
+    "path": "/api/assessments/v2/sessions/history",
+    "file": "assessmentV2Routes.js",
+    "roles": "Any Authenticated",
+    "line": 189
+  },
+  {
+    "method": "GET",
+    "path": "/api/assessments/v2/history",
+    "file": "assessmentV2Routes.js",
+    "roles": "Any Authenticated",
+    "line": 190
+  },
+  {
+    "method": "GET",
+    "path": "/api/assessments/v2/sessions/:id",
+    "file": "assessmentV2Routes.js",
+    "roles": "Any Authenticated",
+    "line": 196
+  },
+  {
+    "method": "PUT",
+    "path": "/api/assessments/v2/sessions/:id/answers",
+    "file": "assessmentV2Routes.js",
+    "roles": "Any Authenticated",
+    "line": 234
+  },
+  {
+    "method": "POST",
+    "path": "/api/assessments/v2/sessions/:id/snapshots",
+    "file": "assessmentV2Routes.js",
+    "roles": "Any Authenticated",
+    "line": 271
+  },
+  {
+    "method": "POST",
+    "path": "/api/assessments/v2/sessions/:id/run",
+    "file": "assessmentV2Routes.js",
+    "roles": "Any Authenticated",
+    "line": 309
+  },
+  {
+    "method": "POST",
+    "path": "/api/assessments/v2/sessions/:id/submit",
+    "file": "assessmentV2Routes.js",
+    "roles": "candidate",
+    "line": 401
+  },
+  {
+    "method": "GET",
+    "path": "/api/assessments/v2/history",
+    "file": "assessmentV2Routes.js",
+    "roles": "candidate",
+    "line": 450
+  },
+  {
+    "method": "POST",
+    "path": "/api/assessments/v2/sessions/:id/integrity-events",
+    "file": "assessmentV2Routes.js",
+    "roles": "Any Authenticated",
+    "line": 510
+  },
+  {
+    "method": "GET",
+    "path": "/api/assessments/v2/reviews/queue",
+    "file": "assessmentV2Routes.js",
+    "roles": "Any Authenticated",
+    "line": 546
+  },
+  {
+    "method": "GET",
+    "path": "/api/assessments/v2/reviews/:sessionId",
+    "file": "assessmentV2Routes.js",
+    "roles": "Any Authenticated",
+    "line": 564
+  },
+  {
+    "method": "POST",
+    "path": "/api/assessments/v2/reviews/:sessionId",
+    "file": "assessmentV2Routes.js",
+    "roles": "Any Authenticated",
+    "line": 594
+  },
+  {
+    "method": "POST",
+    "path": "/api/pipeline/apply",
+    "file": "pipelineRoutes.js",
+    "roles": "candidate",
+    "line": 11
+  },
+  {
+    "method": "GET",
+    "path": "/api/pipeline/my-applications",
+    "file": "pipelineRoutes.js",
+    "roles": "candidate",
+    "line": 69
+  },
+  {
+    "method": "GET",
+    "path": "/api/pipeline/applications",
+    "file": "pipelineRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 112
+  },
+  {
+    "method": "GET",
+    "path": "/api/pipeline/applications/:id",
+    "file": "pipelineRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 124
+  },
+  {
+    "method": "POST",
+    "path": "/api/pipeline/applications",
+    "file": "pipelineRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 136
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/pipeline/applications/:id/stage",
+    "file": "pipelineRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 154
+  },
+  {
+    "method": "POST",
+    "path": "/api/pipeline/notes",
+    "file": "pipelineRoutes.js",
+    "roles": "candidate",
+    "line": 176
+  },
+  {
+    "method": "GET",
+    "path": "/api/pipeline/shortlists",
+    "file": "pipelineRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 188
+  },
+  {
+    "method": "GET",
+    "path": "/api/pipeline/shortlists/:id/members",
+    "file": "pipelineRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 198
+  },
+  {
+    "method": "POST",
+    "path": "/api/pipeline/shortlists",
+    "file": "pipelineRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 214
+  },
+  {
+    "method": "POST",
+    "path": "/api/pipeline/shortlists/:id/members",
+    "file": "pipelineRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 224
+  },
+  {
+    "method": "GET",
+    "path": "/api/interviews",
+    "file": "interviewRoutes.js",
+    "roles": "platform_admin",
+    "line": 9
+  },
+  {
+    "method": "GET",
+    "path": "/api/interviews/:id",
+    "file": "interviewRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 20
+  },
+  {
+    "method": "POST",
+    "path": "/api/interviews",
+    "file": "interviewRoutes.js",
+    "roles": "platform_admin",
+    "line": 31
+  },
+  {
+    "method": "POST",
+    "path": "/api/interviews/:id/feedback",
+    "file": "interviewRoutes.js",
+    "roles": "platform_admin",
+    "line": 40
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/interviews/:id/cancel",
+    "file": "interviewRoutes.js",
+    "roles": "platform_admin",
+    "line": 49
+  },
+  {
+    "method": "GET",
+    "path": "/api/analytics/dashboard",
+    "file": "analyticsRoutes.js",
+    "roles": "platform_admin",
+    "line": 9
+  },
+  {
+    "method": "GET",
+    "path": "/api/analytics/student",
+    "file": "analyticsRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 21
+  },
+  {
+    "method": "GET",
+    "path": "/api/analytics/college",
+    "file": "analyticsRoutes.js",
+    "roles": "platform_admin",
+    "line": 39
+  },
+  {
+    "method": "POST",
+    "path": "/api/analytics/college/link",
+    "file": "analyticsRoutes.js",
+    "roles": "platform_admin",
+    "line": 68
+  },
+  {
+    "method": "GET",
+    "path": "/api/college/drives",
+    "file": "collegeRoutes.js",
+    "roles": "college, placement_officer",
+    "line": 64
+  },
+  {
+    "method": "POST",
+    "path": "/api/college/drives",
+    "file": "collegeRoutes.js",
+    "roles": "college, placement_officer",
+    "line": 75
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/college/drives/:id",
+    "file": "collegeRoutes.js",
+    "roles": "college, placement_officer",
+    "line": 86
+  },
+  {
+    "method": "GET",
+    "path": "/api/college/drives/:id/eligible",
+    "file": "collegeRoutes.js",
+    "roles": "college, placement_officer",
+    "line": 96
+  },
+  {
+    "method": "GET",
+    "path": "/api/college/at-risk",
+    "file": "collegeRoutes.js",
+    "roles": "college, placement_officer",
+    "line": 107
+  },
+  {
+    "method": "POST",
+    "path": "/api/college/remediation",
+    "file": "collegeRoutes.js",
+    "roles": "college, placement_officer",
+    "line": 119
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/college/remediation/:id",
+    "file": "collegeRoutes.js",
+    "roles": "college, placement_officer",
+    "line": 130
+  },
+  {
+    "method": "GET",
+    "path": "/api/college/curriculum",
+    "file": "collegeRoutes.js",
+    "roles": "college, placement_officer",
+    "line": 141
+  },
+  {
+    "method": "POST",
+    "path": "/api/college/curriculum",
+    "file": "collegeRoutes.js",
+    "roles": "college, placement_officer",
+    "line": 152
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/college/curriculum/:id",
+    "file": "collegeRoutes.js",
+    "roles": "college, placement_officer",
+    "line": 163
+  },
+  {
+    "method": "GET",
+    "path": "/api/college/settings",
+    "file": "collegeRoutes.js",
+    "roles": "college, placement_officer",
+    "line": 174
+  },
+  {
+    "method": "PUT",
+    "path": "/api/college/settings",
+    "file": "collegeRoutes.js",
+    "roles": "college, placement_officer",
+    "line": 185
+  },
+  {
+    "method": "GET",
+    "path": "/api/college/users",
+    "file": "collegeRoutes.js",
+    "roles": "college, placement_officer",
+    "line": 197
+  },
+  {
+    "method": "GET",
+    "path": "/api/organization",
+    "file": "organizationRoutes.js",
+    "roles": "platform_admin",
+    "line": 9
+  },
+  {
+    "method": "PUT",
+    "path": "/api/organization/settings",
+    "file": "organizationRoutes.js",
+    "roles": "platform_admin",
+    "line": 20
+  },
+  {
+    "method": "GET",
+    "path": "/api/organization/members",
+    "file": "organizationRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 29
+  },
+  {
+    "method": "POST",
+    "path": "/api/organization/members",
+    "file": "organizationRoutes.js",
+    "roles": "platform_admin",
+    "line": 39
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/organization/members/:id/role",
+    "file": "organizationRoutes.js",
+    "roles": "platform_admin",
+    "line": 51
+  },
+  {
+    "method": "GET",
+    "path": "/api/chat/status",
+    "file": "chatRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 14
+  },
+  {
+    "method": "GET",
+    "path": "/api/chat/suggestions",
+    "file": "chatRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 35
+  },
+  {
+    "method": "POST",
+    "path": "/api/chat/message",
+    "file": "chatRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 50
+  },
+  {
+    "method": "GET",
+    "path": "/api/roadmap",
+    "file": "roadmapRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 72
+  },
+  {
+    "method": "PUT",
+    "path": "/api/roadmap",
+    "file": "roadmapRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 221
+  },
+  {
+    "method": "POST",
+    "path": "/api/roadmap",
+    "file": "roadmapRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 222
+  },
+  {
+    "method": "POST",
+    "path": "/api/roadmap/task",
+    "file": "roadmapRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 223
+  },
+  {
+    "method": "GET",
+    "path": "/api/settings",
+    "file": "settingsRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 15
+  },
+  {
+    "method": "PUT",
+    "path": "/api/settings",
+    "file": "settingsRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 53
+  },
+  {
+    "method": "GET",
+    "path": "/api/resources",
+    "file": "resourceRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 21
+  },
+  {
+    "method": "GET",
+    "path": "/api/resources/recommendations",
+    "file": "resourceRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 106
+  },
+  {
+    "method": "GET",
+    "path": "/api/resources/recommended",
+    "file": "resourceRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 107
+  },
+  {
+    "method": "GET",
+    "path": "/api/resources/:id/playlist",
+    "file": "resourceRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 109
+  },
+  {
+    "method": "POST",
+    "path": "/api/resources/:id/bookmark",
+    "file": "resourceRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 123
+  },
+  {
+    "method": "POST",
+    "path": "/api/resources/:id/progress",
+    "file": "resourceRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 138
+  },
+  {
+    "method": "POST",
+    "path": "/api/resources/:id/add-to-passport",
+    "file": "resourceRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 159
+  },
+  {
+    "method": "GET",
+    "path": "/api/notifications",
+    "file": "notificationRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 7
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/notifications/:id/read",
+    "file": "notificationRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 20
+  },
+  {
+    "method": "POST",
+    "path": "/api/notifications/read-all",
+    "file": "notificationRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 33
+  },
+  {
+    "method": "POST",
+    "path": "/api/feedback",
+    "file": "feedbackRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 14
+  },
+  {
+    "method": "GET",
+    "path": "/api/passport/share",
+    "file": "passportShareRoutes.js",
+    "roles": "candidate",
+    "line": 25
+  },
+  {
+    "method": "POST",
+    "path": "/api/passport/share/toggle",
+    "file": "passportShareRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 79
+  },
+  {
+    "method": "PUT",
+    "path": "/api/passport/share/config",
+    "file": "passportShareRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 128
+  },
+  {
+    "method": "POST",
+    "path": "/api/passport/share/regenerate",
+    "file": "passportShareRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 183
+  },
+  {
+    "method": "GET",
+    "path": "/api/passport/public/:publicId",
+    "file": "passportShareRoutes.js",
+    "roles": "Public / Unauthenticated",
+    "line": 227
+  },
+  {
+    "method": "GET",
+    "path": "/api/resumes",
+    "file": "resumeRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 28
+  },
+  {
+    "method": "GET",
+    "path": "/api/resumes/compile",
+    "file": "resumeRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 41
+  },
+  {
+    "method": "GET",
+    "path": "/api/resumes/:id",
+    "file": "resumeRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 57
+  },
+  {
+    "method": "POST",
+    "path": "/api/resumes",
+    "file": "resumeRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 73
+  },
+  {
+    "method": "PUT",
+    "path": "/api/resumes/:id",
+    "file": "resumeRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 87
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/resumes/:id",
+    "file": "resumeRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 101
+  },
+  {
+    "method": "GET",
+    "path": "/api/skills/benchmarks",
+    "file": "skillEngineRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 14
+  },
+  {
+    "method": "GET",
+    "path": "/api/skills/benchmarks/:roleTitle",
+    "file": "skillEngineRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 30
+  },
+  {
+    "method": "GET",
+    "path": "/api/skills/canonical-profile",
+    "file": "skillEngineRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 64
+  },
+  {
+    "method": "GET",
+    "path": "/api/skills/profile",
+    "file": "skillEngineRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 65
+  },
+  {
+    "method": "GET",
+    "path": "/api/skills/recommendations",
+    "file": "skillEngineRoutes.js",
+    "roles": "platform_admin",
+    "line": 71
+  },
+  {
+    "method": "GET",
+    "path": "/api/skills/gaps",
+    "file": "skillEngineRoutes.js",
+    "roles": "platform_admin",
+    "line": 93
+  },
+  {
+    "method": "GET",
+    "path": "/api/skills/readiness",
+    "file": "skillEngineRoutes.js",
+    "roles": "platform_admin",
+    "line": 115
+  },
+  {
+    "method": "GET",
+    "path": "/api/skills/provenance/:skillId",
+    "file": "skillEngineRoutes.js",
+    "roles": "platform_admin",
+    "line": 137
+  },
+  {
+    "method": "POST",
+    "path": "/api/skills/adaptive/start",
+    "file": "skillEngineRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 172
+  },
+  {
+    "method": "POST",
+    "path": "/api/skills/assessment/adaptive/start",
+    "file": "skillEngineRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 173
+  },
+  {
+    "method": "GET",
+    "path": "/api/skills/adaptive/question/:sessionId",
+    "file": "skillEngineRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 179
+  },
+  {
+    "method": "POST",
+    "path": "/api/skills/adaptive/answer",
+    "file": "skillEngineRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 219
+  },
+  {
+    "method": "POST",
+    "path": "/api/skills/adaptive/submit",
+    "file": "skillEngineRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 220
+  },
+  {
+    "method": "POST",
+    "path": "/api/skills/assessment/adaptive/submit",
+    "file": "skillEngineRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 221
+  },
+  {
+    "method": "GET",
+    "path": "/api/skills/challenges",
+    "file": "skillEngineRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 227
+  },
+  {
+    "method": "GET",
+    "path": "/api/skills/challenges/:id",
+    "file": "skillEngineRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 244
+  },
+  {
+    "method": "POST",
+    "path": "/api/skills/challenges/:id/submit",
+    "file": "skillEngineRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 263
+  },
+  {
+    "method": "POST",
+    "path": "/api/skills/recalculate",
+    "file": "skillEngineRoutes.js",
+    "roles": "platform_admin",
+    "line": 289
+  },
+  {
+    "method": "POST",
+    "path": "/api/support/tickets",
+    "file": "supportRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 9
+  },
+  {
+    "method": "GET",
+    "path": "/api/support/tickets",
+    "file": "supportRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 27
+  },
+  {
+    "method": "GET",
+    "path": "/api/support/tickets/:id",
+    "file": "supportRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 37
+  },
+  {
+    "method": "POST",
+    "path": "/api/support/tickets/:id/reply",
+    "file": "supportRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 50
+  },
+  {
+    "method": "POST",
+    "path": "/api/support/tickets/:id/close",
+    "file": "supportRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 61
+  },
+  {
+    "method": "GET",
+    "path": "/api/announcements/active",
+    "file": "announcementRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 8
+  },
+  {
+    "method": "POST",
+    "path": "/api/announcements/:id/dismiss",
+    "file": "announcementRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 19
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/me",
+    "file": "adminRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 37
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/nav-badges",
+    "file": "adminRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 59
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/analytics/overview",
+    "file": "adminRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 132
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/users/export.csv",
+    "file": "adminRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 153
+  },
+  {
+    "method": "POST",
+    "path": "/api/admin/users/bulk-status",
+    "file": "adminRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 165
+  },
+  {
+    "method": "POST",
+    "path": "/api/admin/users/invite",
+    "file": "adminRoutes.js",
+    "roles": "platform_admin",
+    "line": 179
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/users",
+    "file": "adminRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 193
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/users/:id",
+    "file": "adminRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 206
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/admin/users/:id/status",
+    "file": "adminRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 222
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/admin/users/:id/role",
+    "file": "adminRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 236
+  },
+  {
+    "method": "POST",
+    "path": "/api/admin/users/:id/force-password-reset",
+    "file": "adminRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 250
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/approvals",
+    "file": "adminRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 263
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/approvals/stats",
+    "file": "adminRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 276
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/approvals/reason-templates",
+    "file": "adminRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 289
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/approvals/:id",
+    "file": "adminRoutes.js",
+    "roles": "recruiter, hiring_manager",
+    "line": 302
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/approvals/:id/document",
+    "file": "adminRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 318
+  },
+  {
+    "method": "POST",
+    "path": "/api/admin/approvals/:id/decision",
+    "file": "adminRoutes.js",
+    "roles": "recruiter, hiring_manager",
+    "line": 338
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/integrity/stats",
+    "file": "adminRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 369
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/integrity/sessions",
+    "file": "adminRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 382
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/integrity/sessions/:id",
+    "file": "adminRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 395
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/integrity/sessions/:id/compare/:otherId",
+    "file": "adminRoutes.js",
+    "roles": "candidate",
+    "line": 411
+  },
+  {
+    "method": "POST",
+    "path": "/api/admin/integrity/sessions/:id/review",
+    "file": "adminRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 427
+  },
+  {
+    "method": "POST",
+    "path": "/api/admin/integrity/sessions/:id/recompute",
+    "file": "adminRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 452
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/content/domains",
+    "file": "adminContentRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 7
+  },
+  {
+    "method": "POST",
+    "path": "/api/admin/content/domains",
+    "file": "adminContentRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 16
+  },
+  {
+    "method": "PUT",
+    "path": "/api/admin/content/domains/:id",
+    "file": "adminContentRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 26
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/admin/content/domains/:id",
+    "file": "adminContentRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 36
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/content/skills/duplicates",
+    "file": "adminContentRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 47
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/content/skills",
+    "file": "adminContentRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 56
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/content/skills/:id",
+    "file": "adminContentRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 65
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/content/skills/:id/usage",
+    "file": "adminContentRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 75
+  },
+  {
+    "method": "POST",
+    "path": "/api/admin/content/skills",
+    "file": "adminContentRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 84
+  },
+  {
+    "method": "PUT",
+    "path": "/api/admin/content/skills/:id",
+    "file": "adminContentRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 94
+  },
+  {
+    "method": "POST",
+    "path": "/api/admin/content/skills/:id/archive",
+    "file": "adminContentRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 104
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/admin/content/skills/:id",
+    "file": "adminContentRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 114
+  },
+  {
+    "method": "POST",
+    "path": "/api/admin/content/skills/:id/aliases",
+    "file": "adminContentRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 128
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/admin/content/skills/:id/aliases/:aliasId",
+    "file": "adminContentRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 138
+  },
+  {
+    "method": "POST",
+    "path": "/api/admin/content/skills/merge",
+    "file": "adminContentRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 148
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/content/benchmarks",
+    "file": "adminContentRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 159
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/content/benchmarks/:id",
+    "file": "adminContentRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 168
+  },
+  {
+    "method": "POST",
+    "path": "/api/admin/content/benchmarks",
+    "file": "adminContentRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 178
+  },
+  {
+    "method": "PUT",
+    "path": "/api/admin/content/benchmarks/:id",
+    "file": "adminContentRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 188
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/content/resources/export.json",
+    "file": "adminContentRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 199
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/content/resources",
+    "file": "adminContentRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 210
+  },
+  {
+    "method": "POST",
+    "path": "/api/admin/content/resources/check-links",
+    "file": "adminContentRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 219
+  },
+  {
+    "method": "POST",
+    "path": "/api/admin/content/resources/:id/check-link",
+    "file": "adminContentRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 229
+  },
+  {
+    "method": "POST",
+    "path": "/api/admin/content/resources/import",
+    "file": "adminContentRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 239
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/copilot/sessions",
+    "file": "adminCopilotRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 15
+  },
+  {
+    "method": "POST",
+    "path": "/api/admin/copilot/sessions",
+    "file": "adminCopilotRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 27
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/copilot/sessions/:id",
+    "file": "adminCopilotRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 44
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/admin/copilot/sessions/:id",
+    "file": "adminCopilotRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 59
+  },
+  {
+    "method": "POST",
+    "path": "/api/admin/copilot/sessions/:id/messages",
+    "file": "adminCopilotRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 74
+  },
+  {
+    "method": "POST",
+    "path": "/api/admin/copilot/messages/:id/feedback",
+    "file": "adminCopilotRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 94
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/insights/forecast",
+    "file": "adminInsightsRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 16
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/insights/anomalies",
+    "file": "adminInsightsRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 30
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/insights/recruiter-trust",
+    "file": "adminInsightsRoutes.js",
+    "roles": "recruiter, hiring_manager",
+    "line": 44
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/insights/recruiter-trust/:orgId",
+    "file": "adminInsightsRoutes.js",
+    "roles": "recruiter, hiring_manager",
+    "line": 57
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/insights/skill-gap-market",
+    "file": "adminInsightsRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 73
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/insights/funnel-cohorts",
+    "file": "adminInsightsRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 85
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/insights/correlations",
+    "file": "adminInsightsRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 98
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/support/tickets",
+    "file": "adminSupportRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 7
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/support/tickets/stats",
+    "file": "adminSupportRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 16
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/support/tickets/:id",
+    "file": "adminSupportRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 25
+  },
+  {
+    "method": "POST",
+    "path": "/api/admin/support/tickets/:id/reply",
+    "file": "adminSupportRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 35
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/admin/support/tickets/:id",
+    "file": "adminSupportRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 45
+  },
+  {
+    "method": "POST",
+    "path": "/api/admin/support/tickets/bulk",
+    "file": "adminSupportRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 55
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/support/canned",
+    "file": "adminSupportRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 66
+  },
+  {
+    "method": "POST",
+    "path": "/api/admin/support/canned",
+    "file": "adminSupportRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 75
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/admin/support/canned/:id",
+    "file": "adminSupportRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 85
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/support/announcements",
+    "file": "adminSupportRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 96
+  },
+  {
+    "method": "POST",
+    "path": "/api/admin/support/announcements",
+    "file": "adminSupportRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 105
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/admin/support/announcements/:id/toggle",
+    "file": "adminSupportRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 115
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/system/health",
+    "file": "adminSystemRoutes.js",
+    "roles": "Public / Unauthenticated",
+    "line": 16
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/system/metrics",
+    "file": "adminSystemRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 25
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/system/errors",
+    "file": "adminSystemRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 34
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/system/backups",
+    "file": "adminSystemRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 43
+  },
+  {
+    "method": "POST",
+    "path": "/api/admin/system/backups",
+    "file": "adminSystemRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 52
+  },
+  {
+    "method": "POST",
+    "path": "/api/admin/system/retention/run",
+    "file": "adminSystemRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 61
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/system/flags",
+    "file": "adminSystemRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 73
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/admin/system/flags/:key",
+    "file": "adminSystemRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 82
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/system/audit",
+    "file": "adminSystemRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 98
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/system/audit/verify",
+    "file": "adminSystemRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 107
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/system/audit/export.csv",
+    "file": "adminSystemRoutes.js",
+    "roles": "Any Authenticated",
+    "line": 116
+  }
+]

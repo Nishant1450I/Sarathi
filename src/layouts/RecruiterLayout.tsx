@@ -120,7 +120,9 @@ const RecruiterLayoutContent: React.FC = () => {
 
   // Enforce role authorization: users without recruiter authorization are redirected to their portal
   if (user.role !== 'recruiter' && !user.roles?.includes('recruiter')) {
-    const redirectPath = user.role === 'student' ? '/student/dashboard' : '/college/dashboard';
+    const redirectPath =
+      user.role === 'platform_admin' ? '/admin' :
+      user.role === 'student' ? '/student/dashboard' : '/college/dashboard';
     return <Navigate to={redirectPath} replace />;
   }
 

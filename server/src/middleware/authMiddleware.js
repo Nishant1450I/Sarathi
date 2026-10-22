@@ -14,7 +14,7 @@ export function authenticate(req, res, next) {
     if (decoded) {
       // Check live status in database (a user suspended mid-session loses access)
       const liveUser = repository.queryOne(
-        'SELECT id, status, role, institution_id FROM users WHERE id = ? AND deleted_at IS NULL;',
+        'SELECT id, status, role, institution_id, institution FROM users WHERE id = ? AND deleted_at IS NULL;',
         [decoded.sub]
       );
 
@@ -23,9 +23,12 @@ export function authenticate(req, res, next) {
           id: decoded.sub,
           email: decoded.email,
           fullName: decoded.name,
+          role: liveUser.role || decoded.globalRole,
           globalRole: liveUser.role || decoded.globalRole,
           status: liveUser.status,
+          institution: liveUser.institution || decoded.institution || null,
           institutionId: liveUser.institution_id || decoded.institutionId || null,
+          institution_id: liveUser.institution_id || decoded.institutionId || null,
           orgId: decoded.orgId,
           orgRole: decoded.orgRole,
         };

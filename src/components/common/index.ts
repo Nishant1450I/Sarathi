@@ -8,3 +8,4 @@ export * from './ProgressBar';
 export * from './Logo';
 export * from './DomainRoleSelector';
 export * from './LoadingSpinner';
+export * from './Skeleton';

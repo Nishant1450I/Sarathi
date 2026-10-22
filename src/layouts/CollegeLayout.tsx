@@ -11,7 +11,10 @@ import {
   Menu,
   X,
   ChevronDown,
-  BookOpen
+  BookOpen,
+  Briefcase,
+  ShieldAlert,
+  Settings
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { mockCollegeAnalyticsData } from '../data/mockRecruiterCollege';
@@ -34,6 +37,8 @@ export const collegeNavSections: CollegeNavSection[] = [
     title: 'Institutional Intelligence',
     items: [
       { label: 'Readiness Overview', path: '/college/dashboard', icon: LayoutDashboard },
+      { label: 'Placement Drives', path: '/college/drives', icon: Briefcase },
+      { label: 'At-Risk Students', path: '/college/at-risk', icon: ShieldAlert },
     ],
   },
   {
@@ -43,6 +48,7 @@ export const collegeNavSections: CollegeNavSection[] = [
       { label: 'Skill Gap Matrix', path: '/college/dashboard#skill-gaps', icon: Target },
       { label: 'Batch Benchmark Trends', path: '/college/dashboard#benchmarks', icon: BarChart3 },
       { label: 'Technical Domains', path: '/college/dashboard#domains', icon: BookOpen },
+      { label: 'Settings', path: '/college/settings', icon: Settings },
     ],
   },
 ];
@@ -76,7 +82,9 @@ export const CollegeLayout: React.FC = () => {
 
   // Enforce role authorization: users without college authorization are redirected to their portal
   if (user.role !== 'college' && !user.roles?.includes('college')) {
-    const redirectPath = user.role === 'recruiter' ? '/recruiter/dashboard' : '/student/dashboard';
+    const redirectPath =
+      user.role === 'platform_admin' ? '/admin' :
+      user.role === 'recruiter' ? '/recruiter/dashboard' : '/student/dashboard';
     return <Navigate to={redirectPath} replace />;
   }
 
@@ -136,10 +144,13 @@ export const CollegeLayout: React.FC = () => {
             <div className="space-y-0.5">
               {section.items.map((item) => {
                 const Icon = item.icon;
-                const isDashboard = item.path === '/college/dashboard';
-                const isActive = isDashboard
-                  ? location.pathname === '/college/dashboard' && (!location.hash || location.hash === '')
-                  : location.hash === item.path.replace('/college/dashboard', '');
+                const isHashLink = item.path.includes('#');
+                const hashAnchor = isHashLink ? item.path.substring(item.path.indexOf('#')) : '';
+                const basePath = isHashLink ? item.path.substring(0, item.path.indexOf('#')) : item.path;
+
+                const isActive = isHashLink
+                  ? location.pathname === basePath && location.hash === hashAnchor
+                  : location.pathname === item.path && (!location.hash || location.hash === '');
 
                 return (
                   <NavLink

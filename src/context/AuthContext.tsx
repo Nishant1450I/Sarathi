@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import type { UserProfile, UserRole, AuthState } from '../types/user';
 import {
   StorageService,
@@ -68,6 +68,7 @@ function clearSession() {
 
 const mapBackendUserToProfile = (serverUser: any, organization?: any): UserProfile => {
   const mappedRole: UserRole =
+    serverUser.role === 'platform_admin' ? 'platform_admin' :
     serverUser.role === 'recruiter' ? 'recruiter' :
     serverUser.role === 'college' ? 'college' : 'student';
 
@@ -77,6 +78,7 @@ const mapBackendUserToProfile = (serverUser: any, organization?: any): UserProfi
     fullName: serverUser.fullName || serverUser.full_name || 'Sarathi User',
     role: mappedRole,
     roles: [mappedRole],
+    lastLoginAt: serverUser.lastLoginAt || serverUser.last_login_at,
     companyName: organization?.name || serverUser.companyName || serverUser.company_name || (mappedRole === 'recruiter' ? 'NexTech Innovations' : undefined),
     institution: serverUser.institution || (mappedRole === 'student' ? 'National Institute of Technology' : undefined),
     avatarUrl: serverUser.avatarUrl || serverUser.avatar_url,
@@ -104,8 +106,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [appMode, setAppMode] = useState<'demo' | 'production'>('demo');
   const [isDemo, setIsDemo] = useState<boolean>(true);
 
+  const tokenRef = useRef<string | null>(token);
+  useEffect(() => {
+    tokenRef.current = token;
+  }, [token]);
+
   const logout = useCallback(() => {
-    const currentToken = token || getStoredToken();
+    const currentToken = tokenRef.current || getStoredToken();
     if (currentToken) {
       fetch('/api/auth/logout', {
         method: 'POST',
@@ -129,7 +136,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         channel.close();
       }
     } catch {}
-  }, [token]);
+  }, []);
 
   // Synchronize authentication and logout state across open browser tabs
   useEffect(() => {
@@ -168,98 +175,100 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let isMounted = true;
 
     async function initializeAuth() {
-      // 1. Detect server mode
-      let currentMode: 'demo' | 'production' = 'demo';
       try {
-        const modeRes = await fetch('/api/auth/mode');
-        if (modeRes.ok) {
-          const modeData = await modeRes.json();
-          currentMode = modeData.mode === 'production' ? 'production' : 'demo';
-        }
-      } catch {
-        currentMode = 'demo';
-      }
-
-      if (!isMounted) return;
-      setAppMode(currentMode);
-      setIsDemo(currentMode === 'demo');
-
-      // 2. Check for existing session token
-      const savedToken = getStoredToken();
-      if (savedToken) {
+        // 1. Detect server mode
+        let currentMode: 'demo' | 'production' = 'demo';
         try {
-          const meRes = await fetch('/api/auth/me', {
-            headers: { Authorization: `Bearer ${savedToken}` }
-          });
-
-          if (meRes.ok) {
-            const meData = await meRes.json();
-            
-            // If user status is suspended or pending approval, revoke session
-            if (meData.user?.status === 'suspended') {
-              if (isMounted) logout();
-              return;
-            }
-
-            const activeOrg = meData.organizations?.find((o: any) => o.id === meData.activeOrgId) || meData.organizations?.[0];
-            const profile = mapBackendUserToProfile(meData.user, activeOrg);
-            
-            if (profile.role === 'student') {
-              try {
-                const candRes = await fetch('/api/candidates/profile', {
-                  headers: { Authorization: `Bearer ${savedToken}` }
-                });
-                if (candRes.ok) {
-                  const candData = await candRes.json();
-                  if (candData.data) {
-                    Object.assign(profile, mapBackendUserToProfile(candData.data));
-                  }
-                }
-              } catch {
-                // Non-fatal fallback to basic user profile
-              }
-            }
-
-            if (isMounted) {
-              setUser(profile);
-              setToken(savedToken);
-              setActiveOrgId(meData.activeOrgId || activeOrg?.id || null);
-
-              if (profile.role === 'recruiter') {
-                recruiterApi.setAuthToken(savedToken, meData.activeOrgId || activeOrg?.id);
-              } else if (profile.role === 'student') {
-                OpportunityService.setAuthToken(savedToken);
-              }
-            }
-          } else {
-            // Token is invalid/expired
-            if (isMounted) {
-              logout();
-            }
+          const modeRes = await fetch('/api/auth/mode');
+          if (modeRes.ok) {
+            const modeData = await modeRes.json();
+            currentMode = modeData.mode === 'production' ? 'production' : 'demo';
           }
         } catch {
-          // If offline, check for cached user in storage
-          const cachedUserStr = sessionStorage.getItem('sarathi_auth_user') || localStorage.getItem('sarathi_auth_user');
-          if (cachedUserStr && isMounted) {
-            try {
-              const cachedUser = JSON.parse(cachedUserStr);
-              setUser(cachedUser);
-              setToken(savedToken);
-            } catch {
-              logout();
+          currentMode = 'demo';
+        }
+
+        if (!isMounted) return;
+        setAppMode(currentMode);
+        setIsDemo(currentMode === 'demo');
+
+        // 2. Check for existing session token
+        const savedToken = getStoredToken();
+        if (savedToken) {
+          try {
+            const meRes = await fetch('/api/auth/me', {
+              headers: { Authorization: `Bearer ${savedToken}` }
+            });
+
+            if (meRes.ok) {
+              const meData = await meRes.json();
+              
+              // If user status is suspended or pending approval, revoke session
+              if (meData.user?.status === 'suspended') {
+                if (isMounted) logout();
+                return;
+              }
+
+              const activeOrg = meData.organizations?.find((o: any) => o.id === meData.activeOrgId) || meData.organizations?.[0];
+              const profile = mapBackendUserToProfile(meData.user, activeOrg);
+              
+              if (profile.role === 'student') {
+                try {
+                  const candRes = await fetch('/api/candidates/profile', {
+                    headers: { Authorization: `Bearer ${savedToken}` }
+                  });
+                  if (candRes.ok) {
+                    const candData = await candRes.json();
+                    if (candData.data) {
+                      Object.assign(profile, mapBackendUserToProfile(candData.data));
+                    }
+                  }
+                } catch {
+                  // Non-fatal fallback to basic user profile
+                }
+              }
+
+              if (isMounted) {
+                setUser(profile);
+                setToken(savedToken);
+                setActiveOrgId(meData.activeOrgId || activeOrg?.id || null);
+
+                if (profile.role === 'recruiter') {
+                  recruiterApi.setAuthToken(savedToken, meData.activeOrgId || activeOrg?.id);
+                } else if (profile.role === 'student') {
+                  OpportunityService.setAuthToken(savedToken);
+                }
+              }
+            } else {
+              // Token is invalid/expired
+              if (isMounted) {
+                logout();
+              }
+            }
+          } catch {
+            // If offline, check for cached user in storage
+            const cachedUserStr = sessionStorage.getItem('sarathi_auth_user') || localStorage.getItem('sarathi_auth_user');
+            if (cachedUserStr && isMounted) {
+              try {
+                const cachedUser = JSON.parse(cachedUserStr);
+                setUser(cachedUser);
+                setToken(savedToken);
+              } catch {
+                logout();
+              }
             }
           }
+        } else {
+          // Check if demo college was active in demo mode
+          const isDemoCollege = sessionStorage.getItem('sarathi_demo_college');
+          if (isDemoCollege && currentMode === 'demo' && isMounted) {
+            setUser(defaultDemoCollege);
+          }
         }
-      } else {
-        // Check if demo college was active in demo mode
-        const isDemoCollege = sessionStorage.getItem('sarathi_demo_college');
-        if (isDemoCollege && currentMode === 'demo' && isMounted) {
-          setUser(defaultDemoCollege);
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
         }
-      }
-
-      if (isMounted) {
-        setIsLoading(false);
       }
     }
 
@@ -270,7 +279,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [logout]);
 
-  const login = async (
+  const login = useCallback(async (
     email: string,
     passwordOrRole?: string | UserRole,
     roleParam?: UserRole,
@@ -282,29 +291,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Normalize parameters
       let password = '';
-      let targetRole: UserRole | undefined = roleParam;
+      let _targetRole: UserRole | undefined = roleParam;
       if (typeof passwordOrRole === 'string') {
         if (passwordOrRole === 'student' || passwordOrRole === 'recruiter' || passwordOrRole === 'college') {
-          targetRole = passwordOrRole;
+          _targetRole = passwordOrRole;
         } else {
           password = passwordOrRole;
         }
       }
+      void _targetRole;
 
-      // College presentation demo account
-      if (cleanEmail === defaultDemoCollege.email.toLowerCase() || targetRole === 'college') {
-        if (appMode === 'demo') {
-          setUser(defaultDemoCollege);
-          sessionStorage.setItem('sarathi_demo_college', 'true');
-          sessionStorage.removeItem('sarathi_auth_token');
-          sessionStorage.removeItem('sarathi_auth_user');
-          return defaultDemoCollege;
-        } else {
-          throw new Error('Institutional college accounts must be provisioned by institution administrator in production mode.');
-        }
+      // College presentation demo account — ONLY when the exact demo email is used.
+      // Do NOT shortcut just because the College tab is selected; real users must
+      // always authenticate with their own email + password.
+      if (cleanEmail === defaultDemoCollege.email.toLowerCase() && appMode === 'demo') {
+        setUser(defaultDemoCollege);
+        sessionStorage.setItem('sarathi_demo_college', 'true');
+        sessionStorage.removeItem('sarathi_auth_token');
+        sessionStorage.removeItem('sarathi_auth_user');
+        return defaultDemoCollege;
       }
 
-      // In demo mode, if password was omitted, supply default demo credential
+      // In demo mode, if password was omitted (e.g. via switchDemoRole), supply default demo credential
       if (!password && appMode === 'demo') {
         password = 'password123';
       }
@@ -345,9 +353,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [appMode]);
 
-  const signup = async (
+  const signup = useCallback(async (
     fullName: string,
     email: string,
     role: UserRole,
@@ -395,9 +403,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
-  const updateProfile = async (updates: Partial<UserProfile>) => {
+  const updateProfile = useCallback(async (updates: Partial<UserProfile>) => {
     if (!user) return;
 
     if (token && user.role === 'student') {
@@ -433,20 +441,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (localStorage.getItem('sarathi_remember_me') === 'true') {
       localStorage.setItem('sarathi_auth_user', JSON.stringify(updatedUser));
     }
-  };
+  }, [user, token]);
 
-  const switchDemoRole = async (role: UserRole) => {
+  const switchDemoRole = useCallback(async (role: UserRole) => {
     if (appMode !== 'demo') return;
     if (role === 'student') {
       await login('student@sarathi.ai', 'password123', 'student');
     } else if (role === 'recruiter') {
       await login('recruiter@sarathi.ai', 'password123', 'recruiter');
     } else if (role === 'college') {
-      await login('placement@nit.edu', 'password123', 'college');
+      await login('admin@apex.edu', 'password123', 'college');
+    } else if (role === 'platform_admin') {
+      await login('admin@sarathi.dev', 'password123', 'platform_admin');
     }
-  };
+  }, [appMode, login]);
 
-  const loginAsNewStudent = async (name: string = 'Brand-New Student', email?: string) => {
+  const loginAsNewStudent = useCallback(async (name: string = 'Brand-New Student', email?: string) => {
     if (appMode !== 'demo') {
       throw new Error('Quick start is only permitted in demo mode.');
     }
@@ -479,9 +489,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     persistSession(data.token, profile, false);
     sessionStorage.removeItem('sarathi_demo_college');
     OpportunityService.setAuthToken(data.token);
-  };
+  }, [appMode]);
 
-  const loginWithGoogle = async (params: GoogleAuthParams): Promise<UserProfile> => {
+  const loginWithGoogle = useCallback(async (params: GoogleAuthParams): Promise<UserProfile> => {
     setIsLoading(true);
     try {
       const rememberMe = params.rememberMe ?? true;
@@ -539,7 +549,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   return (
     <AuthContext.Provider

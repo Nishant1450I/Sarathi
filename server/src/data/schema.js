@@ -7,19 +7,43 @@
 //  - Timestamps are ISO-8601 UTC.
 //  - Multi-tenant RBAC and candidate privacy boundaries are enforced at the schema and service level.
 
-export const SCHEMA_VERSION = 9;
+export const SCHEMA_VERSION = 16;
 
 export const ddl = `
 -- ============ ORGANISATIONS ============
 CREATE TABLE IF NOT EXISTS organisations (
-  id         TEXT PRIMARY KEY,
-  name       TEXT NOT NULL,
-  slug       TEXT NOT NULL UNIQUE,
-  timezone   TEXT NOT NULL DEFAULT 'Asia/Kolkata',
-  currency   TEXT NOT NULL DEFAULT 'INR',
-  settings   TEXT NOT NULL DEFAULT '{}',
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
+  id                  TEXT PRIMARY KEY,
+  name                TEXT NOT NULL,
+  slug                TEXT NOT NULL UNIQUE,
+  timezone            TEXT NOT NULL DEFAULT 'Asia/Kolkata',
+  currency            TEXT NOT NULL DEFAULT 'INR',
+  settings            TEXT NOT NULL DEFAULT '{}',
+  verification_status TEXT NOT NULL DEFAULT 'unverified',
+  created_at          TEXT NOT NULL,
+  updated_at          TEXT NOT NULL
+);
+
+-- ============ BUSINESS VERIFICATIONS ============
+CREATE TABLE IF NOT EXISTS business_verifications (
+  id              TEXT PRIMARY KEY,
+  org_id          TEXT NOT NULL REFERENCES organisations(id) ON DELETE CASCADE,
+  user_id         TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  document_type   TEXT NOT NULL,
+  document_name   TEXT NOT NULL,
+  file_path       TEXT NOT NULL,
+  file_size       INTEGER NOT NULL DEFAULT 0,
+  mime_type       TEXT NOT NULL,
+  file_hash       TEXT,
+  tax_identifier  TEXT,
+  status          TEXT NOT NULL DEFAULT 'pending',
+  submitted_at    TEXT NOT NULL,
+  reviewed_at     TEXT,
+  reviewed_by     TEXT REFERENCES users(id),
+  decision_reason TEXT,
+  decision_notes  TEXT,
+  override        INTEGER NOT NULL DEFAULT 0,
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL
 );
 
 -- ============ INSTITUTIONS ============
@@ -45,6 +69,8 @@ CREATE TABLE IF NOT EXISTS users (
   institution_id TEXT REFERENCES institutions(id),
   timezone       TEXT NOT NULL DEFAULT 'Asia/Kolkata',
   avatar_url     TEXT,
+  last_login_at  TEXT,
+  email_verified INTEGER NOT NULL DEFAULT 1,
   created_at     TEXT NOT NULL,
   updated_at     TEXT NOT NULL,
   deleted_at     TEXT
@@ -113,6 +139,7 @@ CREATE TABLE IF NOT EXISTS candidate_profiles (
   graduation_year  INTEGER,
   repo_count       INTEGER DEFAULT 0,
   visibility       TEXT NOT NULL DEFAULT 'public',
+  branch           TEXT,
   consent_at       TEXT,
   consent_until    TEXT,
   created_at       TEXT NOT NULL,
@@ -430,6 +457,75 @@ CREATE TABLE IF NOT EXISTS recruiter_notes (
   updated_at   TEXT NOT NULL
 );
 
+-- ============ PLACEMENT DRIVES ============
+CREATE TABLE IF NOT EXISTS placement_drives (
+  id                      TEXT PRIMARY KEY,
+  institution_id          TEXT REFERENCES institutions(id) ON DELETE CASCADE,
+  institution_name        TEXT NOT NULL,
+  company                 TEXT NOT NULL,
+  role                    TEXT NOT NULL,
+  package_lpa             REAL NOT NULL DEFAULT 0,
+  status                  TEXT NOT NULL DEFAULT 'upcoming',
+  eligible_branches       TEXT NOT NULL DEFAULT '[]',
+  min_readiness           INTEGER NOT NULL DEFAULT 60,
+  required_skills         TEXT NOT NULL DEFAULT '[]',
+  verified_passport_req   INTEGER NOT NULL DEFAULT 0,
+  start_date              TEXT,
+  end_date                TEXT,
+  created_by              TEXT REFERENCES users(id),
+  created_at              TEXT NOT NULL,
+  updated_at              TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS drive_applications (
+  id           TEXT PRIMARY KEY,
+  drive_id     TEXT NOT NULL REFERENCES placement_drives(id) ON DELETE CASCADE,
+  candidate_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  status       TEXT NOT NULL DEFAULT 'applied',
+  applied_at   TEXT NOT NULL,
+  UNIQUE(drive_id, candidate_id)
+);
+
+-- ============ REMEDIATION ASSIGNMENTS ============
+CREATE TABLE IF NOT EXISTS remediation_assignments (
+  id            TEXT PRIMARY KEY,
+  institution_id TEXT,
+  candidate_id  TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  assigned_by   TEXT REFERENCES users(id),
+  missing_skills TEXT NOT NULL DEFAULT '[]',
+  status        TEXT NOT NULL DEFAULT 'assigned',
+  benchmark     INTEGER NOT NULL DEFAULT 60,
+  assigned_at   TEXT NOT NULL,
+  updated_at    TEXT NOT NULL
+);
+
+-- ============ CURRICULUM RECOMMENDATIONS ============
+CREATE TABLE IF NOT EXISTS curriculum_recommendations (
+  id           TEXT PRIMARY KEY,
+  institution_id TEXT,
+  institution_name TEXT NOT NULL,
+  skill        TEXT NOT NULL,
+  rec_type     TEXT NOT NULL DEFAULT 'bootcamp',
+  title        TEXT NOT NULL,
+  description  TEXT NOT NULL,
+  branches     TEXT NOT NULL DEFAULT '[]',
+  status       TEXT NOT NULL DEFAULT 'planned',
+  created_by   TEXT REFERENCES users(id),
+  created_at   TEXT NOT NULL,
+  updated_at   TEXT NOT NULL
+);
+
+-- ============ COLLEGE SETTINGS ============
+CREATE TABLE IF NOT EXISTS college_settings (
+  institution_id TEXT PRIMARY KEY,
+  institution_name TEXT NOT NULL,
+  benchmark_threshold INTEGER NOT NULL DEFAULT 60,
+  branches TEXT NOT NULL DEFAULT '["CSE","IT","AI/DS","ECE"]',
+  batch_year INTEGER NOT NULL DEFAULT 2026,
+  updated_by TEXT,
+  updated_at TEXT NOT NULL
+);
+
 -- ============ AUDIT TRAIL ============
 CREATE TABLE IF NOT EXISTS audit_events (
   id            TEXT PRIMARY KEY,
@@ -441,6 +537,23 @@ CREATE TABLE IF NOT EXISTS audit_events (
   payload       TEXT NOT NULL DEFAULT '{}',
   ip_address    TEXT,
   created_at    TEXT NOT NULL
+);
+
+-- ============ PLATFORM ADMIN AUDIT LOG ============
+CREATE TABLE IF NOT EXISTS admin_audit_log (
+  id          TEXT PRIMARY KEY,
+  admin_id    TEXT NOT NULL REFERENCES users(id),
+  action      TEXT NOT NULL,
+  entity_type TEXT NOT NULL,
+  entity_id   TEXT,
+  before_json TEXT,
+  after_json  TEXT,
+  reason      TEXT,
+  ip          TEXT,
+  user_agent  TEXT,
+  prev_hash   TEXT,
+  hash        TEXT,
+  created_at  TEXT NOT NULL
 );
 
 -- ============ STUDENT ROADMAPS ============
@@ -748,6 +861,137 @@ CREATE TABLE IF NOT EXISTS practical_challenge_submissions (
   submitted_at       TEXT NOT NULL
 );
 
+-- ============ INTEGRITY RISK SCORES ============
+CREATE TABLE IF NOT EXISTS integrity_risk_scores (
+  session_id     TEXT PRIMARY KEY REFERENCES assessment_sessions(id) ON DELETE CASCADE,
+  score          INTEGER NOT NULL,
+  band           TEXT NOT NULL CHECK(band IN ('low', 'medium', 'high')),
+  features_json  TEXT NOT NULL DEFAULT '{}',
+  reasons_json   TEXT NOT NULL DEFAULT '[]',
+  model_version  TEXT NOT NULL DEFAULT '1.0.0',
+  computed_at    TEXT NOT NULL
+);
+
+-- ============ SKILL ALIASES ============
+CREATE TABLE IF NOT EXISTS skill_aliases (
+  id         TEXT PRIMARY KEY,
+  skill_id   TEXT NOT NULL REFERENCES skills(id) ON DELETE CASCADE,
+  alias      TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  created_at TEXT NOT NULL
+);
+
+-- ============ ROLE BENCHMARKS ============
+CREATE TABLE IF NOT EXISTS role_benchmarks (
+  id                TEXT PRIMARY KEY,
+  role_id           TEXT NOT NULL UNIQUE,
+  title             TEXT NOT NULL,
+  domain_id         TEXT,
+  description       TEXT,
+  benchmark_version TEXT NOT NULL DEFAULT '2026.1',
+  created_at        TEXT NOT NULL,
+  updated_at        TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS role_benchmark_skills (
+  id                 TEXT PRIMARY KEY,
+  benchmark_id       TEXT NOT NULL REFERENCES role_benchmarks(id) ON DELETE CASCADE,
+  skill_id           TEXT NOT NULL,
+  target_level       INTEGER NOT NULL CHECK(target_level BETWEEN 1 AND 5),
+  weight             REAL NOT NULL CHECK(weight > 0),
+  is_mandatory       INTEGER NOT NULL DEFAULT 1,
+  prerequisites_json TEXT NOT NULL DEFAULT '[]',
+  why_it_matters     TEXT,
+  UNIQUE(benchmark_id, skill_id)
+);
+
+-- ============ SUPPORT DESK ============
+CREATE TABLE IF NOT EXISTS support_tickets (
+  id                TEXT PRIMARY KEY,
+  requester_id      TEXT NOT NULL REFERENCES users(id),
+  category          TEXT NOT NULL CHECK(category IN ('account', 'approval', 'test', 'bug', 'other')),
+  subject           TEXT NOT NULL,
+  status            TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open', 'pending', 'resolved', 'closed')),
+  priority          TEXT NOT NULL DEFAULT 'normal' CHECK(priority IN ('low', 'normal', 'high', 'urgent')),
+  assigned_to       TEXT REFERENCES users(id),
+  first_response_at TEXT,
+  resolved_at       TEXT,
+  sla_due_at        TEXT NOT NULL,
+  created_at        TEXT NOT NULL,
+  updated_at        TEXT NOT NULL,
+  last_message_at   TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS support_messages (
+  id               TEXT PRIMARY KEY,
+  ticket_id        TEXT NOT NULL REFERENCES support_tickets(id) ON DELETE CASCADE,
+  sender_id        TEXT NOT NULL REFERENCES users(id),
+  sender_role      TEXT NOT NULL,
+  body             TEXT NOT NULL,
+  is_internal_note INTEGER NOT NULL DEFAULT 0,
+  created_at       TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS support_canned_responses (
+  id         TEXT PRIMARY KEY,
+  title      TEXT NOT NULL,
+  body       TEXT NOT NULL,
+  created_by TEXT NOT NULL REFERENCES users(id),
+  created_at TEXT NOT NULL
+);
+
+-- ============ ANNOUNCEMENTS ============
+CREATE TABLE IF NOT EXISTS announcements (
+  id         TEXT PRIMARY KEY,
+  title      TEXT NOT NULL,
+  body       TEXT NOT NULL,
+  audience   TEXT NOT NULL DEFAULT 'all' CHECK(audience IN ('all', 'student', 'recruiter', 'college', 'reviewer')),
+  severity   TEXT NOT NULL DEFAULT 'info' CHECK(severity IN ('info', 'success', 'warning', 'critical')),
+  starts_at  TEXT NOT NULL,
+  ends_at    TEXT,
+  active     INTEGER NOT NULL DEFAULT 1,
+  created_by TEXT NOT NULL REFERENCES users(id),
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS announcement_dismissals (
+  announcement_id TEXT NOT NULL REFERENCES announcements(id) ON DELETE CASCADE,
+  user_id         TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  dismissed_at    TEXT NOT NULL,
+  PRIMARY KEY (announcement_id, user_id)
+);
+
+-- ============ ADMIN COPILOT CHAT ============
+CREATE TABLE IF NOT EXISTS admin_chat_sessions (
+  id         TEXT PRIMARY KEY,
+  admin_id   TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title      TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS admin_chat_messages (
+  id               TEXT PRIMARY KEY,
+  session_id       TEXT NOT NULL REFERENCES admin_chat_sessions(id) ON DELETE CASCADE,
+  role             TEXT NOT NULL CHECK(role IN ('user', 'assistant', 'system')),
+  content          TEXT NOT NULL,
+  blocks_json      TEXT NOT NULL DEFAULT '[]',
+  tool             TEXT,
+  used_fallback    INTEGER NOT NULL DEFAULT 0,
+  latency_ms       INTEGER NOT NULL DEFAULT 0,
+  feedback         INTEGER,
+  feedback_comment TEXT,
+  created_at       TEXT NOT NULL
+);
+
+-- ============ FEATURE FLAGS ============
+CREATE TABLE IF NOT EXISTS feature_flags (
+  key         TEXT PRIMARY KEY,
+  enabled     INTEGER NOT NULL DEFAULT 1,
+  description TEXT,
+  updated_by  TEXT REFERENCES users(id),
+  updated_at  TEXT NOT NULL
+);
+
 -- ============ INDEXES ============
 CREATE INDEX IF NOT EXISTS idx_canonical_skill_profiles_user ON canonical_skill_profiles(candidate_id);
 CREATE INDEX IF NOT EXISTS idx_skill_evidence_ledger_user ON skill_evidence_ledger(candidate_id, skill_id);
@@ -780,5 +1024,38 @@ CREATE INDEX IF NOT EXISTS idx_auth_identities_user ON auth_identities(user_id);
 CREATE INDEX IF NOT EXISTS idx_auth_identities_provider_sub ON auth_identities(provider, provider_subject);
 CREATE INDEX IF NOT EXISTS idx_invitations_email ON account_invitations(email);
 CREATE INDEX IF NOT EXISTS idx_auth_nonces_exp ON auth_nonces(expires_at);
+CREATE INDEX IF NOT EXISTS idx_admin_audit_log_created_at ON admin_audit_log(created_at);
+CREATE INDEX IF NOT EXISTS idx_admin_audit_log_admin_created ON admin_audit_log(admin_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_admin_audit_log_entity ON admin_audit_log(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_users_created_at ON users(created_at);
+CREATE INDEX IF NOT EXISTS idx_users_role_created ON users(role, created_at);
+CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
+CREATE INDEX IF NOT EXISTS idx_users_last_login_at ON users(last_login_at);
+CREATE INDEX IF NOT EXISTS idx_users_role_status ON users(role, status);
+CREATE INDEX IF NOT EXISTS idx_users_email_verified ON users(email_verified);
+CREATE INDEX IF NOT EXISTS idx_password_resets_user_used ON password_resets(user_id, used_at);
+CREATE INDEX IF NOT EXISTS idx_applications_applied_at ON applications(applied_at);
+CREATE INDEX IF NOT EXISTS idx_assessment_sessions_started_at ON assessment_sessions(started_at);
+CREATE INDEX IF NOT EXISTS idx_session_scores_graded_at ON session_scores(graded_at);
+CREATE INDEX IF NOT EXISTS idx_business_verifications_status ON business_verifications(status, submitted_at);
+CREATE INDEX IF NOT EXISTS idx_business_verifications_org ON business_verifications(org_id);
+CREATE INDEX IF NOT EXISTS idx_business_verifications_user ON business_verifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_business_verifications_hash ON business_verifications(file_hash);
+CREATE INDEX IF NOT EXISTS idx_business_verifications_tax_id ON business_verifications(tax_identifier);
+CREATE INDEX IF NOT EXISTS idx_organisations_verification_status ON organisations(verification_status);
+CREATE INDEX IF NOT EXISTS idx_integrity_risk_scores_band ON integrity_risk_scores(band, score);
+CREATE INDEX IF NOT EXISTS idx_integrity_risk_scores_computed_at ON integrity_risk_scores(computed_at);
+CREATE INDEX IF NOT EXISTS idx_skill_aliases_skill ON skill_aliases(skill_id);
+CREATE INDEX IF NOT EXISTS idx_role_benchmarks_role ON role_benchmarks(role_id);
+CREATE INDEX IF NOT EXISTS idx_role_benchmark_skills_b ON role_benchmark_skills(benchmark_id);
+CREATE INDEX IF NOT EXISTS idx_role_benchmark_skills_s ON role_benchmark_skills(skill_id);
+CREATE INDEX IF NOT EXISTS idx_support_tickets_status_last_msg ON support_tickets(status, last_message_at);
+CREATE INDEX IF NOT EXISTS idx_support_tickets_requester ON support_tickets(requester_id);
+CREATE INDEX IF NOT EXISTS idx_support_tickets_assigned_status ON support_tickets(assigned_to, status);
+CREATE INDEX IF NOT EXISTS idx_support_messages_ticket ON support_messages(ticket_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_announcements_audience ON announcements(audience, active, starts_at);
+CREATE INDEX IF NOT EXISTS idx_admin_chat_sessions_admin ON admin_chat_sessions(admin_id, updated_at);
+CREATE INDEX IF NOT EXISTS idx_admin_chat_messages_session ON admin_chat_messages(session_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_feature_flags_key ON feature_flags(key);
 
 `;

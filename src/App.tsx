@@ -5,6 +5,8 @@ import { PublicLayout } from './layouts/PublicLayout';
 import { StudentLayout } from './layouts/StudentLayout';
 import { RecruiterLayout } from './layouts/RecruiterLayout';
 import { CollegeLayout } from './layouts/CollegeLayout';
+import { AdminLayout } from './layouts/AdminLayout';
+import { RequireRole } from './components/admin/RequireRole';
 import { FloatingChatbot } from './components/chat/FloatingChatbot';
 
 // Public pages
@@ -46,8 +48,26 @@ import { RecruiterSettingsPage } from './pages/recruiter/RecruiterSettingsPage';
 
 // College Dashboard & 404
 import { CollegeDashboard } from './pages/college/CollegeDashboard';
+import { CollegeDrivesPage } from './pages/college/CollegeDrivesPage';
+import { CollegeAtRiskPage } from './pages/college/CollegeAtRiskPage';
+import { CollegeSettingsPage } from './pages/college/CollegeSettingsPage';
 import { ReviewerAssessmentQueuePage } from './pages/reviewer/ReviewerAssessmentQueuePage';
 import { NotFoundPage } from './pages/NotFoundPage';
+
+// Lazy Admin Pages
+const AdminDashboardPage = React.lazy(() => import('./pages/admin/AdminDashboardPage'));
+const AdminUsersPage = React.lazy(() => import('./pages/admin/users/AdminUsersPage'));
+const AdminApprovalsPage = React.lazy(() => import('./pages/admin/approvals/AdminApprovalsPage'));
+const AdminIntegrityPage = React.lazy(() => import('./pages/admin/integrity/AdminIntegrityPage'));
+const AdminContentPage = React.lazy(() => import('./pages/admin/content/AdminContentPage'));
+const AdminSupportPage = React.lazy(() => import('./pages/admin/support/AdminSupportPage'));
+const AdminAnnouncementsPage = React.lazy(() => import('./pages/admin/support/AdminAnnouncementsPage'));
+const AdminInsightsPage = React.lazy(() => import('./pages/admin/insights/AdminInsightsPage'));
+const AdminCopilotPage = React.lazy(() => import('./pages/admin/copilot/AdminCopilotPage'));
+const AdminSystemPage = React.lazy(() => import('./pages/admin/system/AdminSystemPage'));
+const AdminAuditPage = React.lazy(() => import('./pages/admin/system/AdminAuditPage'));
+const AdminSettingsPage = React.lazy(() => import('./pages/admin/system/AdminSettingsPage'));
+import { AdminLoginPage } from './pages/public/AdminLoginPage';
 
 export const App: React.FC = () => {
   return (
@@ -64,6 +84,8 @@ export const App: React.FC = () => {
           <Route path="/signup" element={<SignupPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/admin/login" element={<AdminLoginPage />} />
+          <Route path="/admin-login" element={<AdminLoginPage />} />
           <Route path="/passport/:publicId" element={<PublicPassportPage />} />
 
           {/* Student Portal Routes (Preserved Intact) */}
@@ -108,7 +130,117 @@ export const App: React.FC = () => {
           <Route path="/college" element={<CollegeLayout />}>
             <Route index element={<Navigate to="/college/dashboard" replace />} />
             <Route path="dashboard" element={<CollegeDashboard />} />
+            <Route path="drives" element={<CollegeDrivesPage />} />
+            <Route path="at-risk" element={<CollegeAtRiskPage />} />
+            <Route path="settings" element={<CollegeSettingsPage />} />
             <Route path="assessments/queue" element={<ReviewerAssessmentQueuePage />} />
+          </Route>
+
+          {/* Platform Admin Portal */}
+          <Route
+            path="/admin"
+            element={
+              <RequireRole allowedRoles={['platform_admin']}>
+                <AdminLayout />
+              </RequireRole>
+            }
+          >
+            <Route
+              index
+              element={
+                <React.Suspense fallback={<div className="p-6 text-[13px] text-[#6B7280]">Loading...</div>}>
+                  <AdminDashboardPage />
+                </React.Suspense>
+              }
+            />
+            <Route
+              path="insights"
+              element={
+                <React.Suspense fallback={<div className="p-6 text-[13px] text-[#6B7280]">Loading...</div>}>
+                  <AdminInsightsPage />
+                </React.Suspense>
+              }
+            />
+            <Route
+              path="copilot"
+              element={
+                <React.Suspense fallback={<div className="p-6 text-[13px] text-[#6B7280]">Loading...</div>}>
+                  <AdminCopilotPage />
+                </React.Suspense>
+              }
+            />
+            <Route
+              path="users"
+              element={
+                <React.Suspense fallback={<div className="p-6 text-[13px] text-[#6B7280]">Loading...</div>}>
+                  <AdminUsersPage />
+                </React.Suspense>
+              }
+            />
+            <Route
+              path="approvals"
+              element={
+                <React.Suspense fallback={<div className="p-6 text-[13px] text-[#6B7280]">Loading...</div>}>
+                  <AdminApprovalsPage />
+                </React.Suspense>
+              }
+            />
+            <Route
+              path="integrity"
+              element={
+                <React.Suspense fallback={<div className="p-6 text-[13px] text-[#6B7280]">Loading...</div>}>
+                  <AdminIntegrityPage />
+                </React.Suspense>
+              }
+            />
+            <Route
+              path="content"
+              element={
+                <React.Suspense fallback={<div className="p-6 text-[13px] text-[#6B7280]">Loading...</div>}>
+                  <AdminContentPage />
+                </React.Suspense>
+              }
+            />
+            <Route
+              path="support"
+              element={
+                <React.Suspense fallback={<div className="p-6 text-[13px] text-[#6B7280]">Loading...</div>}>
+                  <AdminSupportPage />
+                </React.Suspense>
+              }
+            />
+            <Route
+              path="announcements"
+              element={
+                <React.Suspense fallback={<div className="p-6 text-[13px] text-[#6B7280]">Loading...</div>}>
+                  <AdminAnnouncementsPage />
+                </React.Suspense>
+              }
+            />
+            <Route
+              path="system"
+              element={
+                <React.Suspense fallback={<div className="p-6 text-[13px] text-[#6B7280]">Loading...</div>}>
+                  <AdminSystemPage />
+                </React.Suspense>
+              }
+            />
+            <Route
+              path="audit"
+              element={
+                <React.Suspense fallback={<div className="p-6 text-[13px] text-[#6B7280]">Loading...</div>}>
+                  <AdminAuditPage />
+                </React.Suspense>
+              }
+            />
+            <Route
+              path="settings"
+              element={
+                <React.Suspense fallback={<div className="p-6 text-[13px] text-[#6B7280]">Loading...</div>}>
+                  <AdminSettingsPage />
+                </React.Suspense>
+              }
+            />
           </Route>
 
           {/* Catch-all 404 Route */}

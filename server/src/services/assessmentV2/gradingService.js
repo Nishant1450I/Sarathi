@@ -4,6 +4,7 @@ import { assessmentV2 } from '../../config/index.js';
 import { QuestionBankService } from './questionBankService.js';
 import { SkillEvidenceEngine } from '../skillEvidenceEngine.js';
 import { RunnerDriver } from '../runner/runnerDriver.js';
+import { IntegrityRiskService } from '../admin/integrityRiskService.js';
 
 export const ASSESSMENT_SCORING_CONFIG = {
   knowledgeWeight: assessmentV2.knowledgeWeight || 0.4,
@@ -634,6 +635,13 @@ export class GradingService {
       try { db.exec('ROLLBACK;'); } catch {}
       console.error('[GradingService] Assessment persistence error:', err);
       throw new Error(`Assessment result persistence failed: ${err.message}`);
+    }
+
+    // Hook anti-cheat integrity scoring: failure must never fail a student submission
+    try {
+      IntegrityRiskService.computeAndSave(sessionId);
+    } catch (riskErr) {
+      console.warn('[GradingService] Non-fatal integrity risk scoring error:', riskErr.message);
     }
 
     return this.getSessionResult(sessionId, userId);

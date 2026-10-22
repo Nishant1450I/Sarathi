@@ -2,6 +2,7 @@ import express from 'express';
 import helmet from 'helmet';
 import { app as appConfig, corsOrigins, validateConfig, assessmentV2 } from './config/index.js';
 import { runMigrations } from './data/migrate.mjs';
+import { getDb } from './config/db.js';
 import { authenticate } from './middleware/authMiddleware.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
@@ -15,6 +16,7 @@ import assessmentV2Routes from './routes/assessmentV2Routes.js';
 import pipelineRoutes from './routes/pipelineRoutes.js';
 import interviewRoutes from './routes/interviewRoutes.js';
 import analyticsRoutes from './routes/analyticsRoutes.js';
+import collegeRoutes from './routes/collegeRoutes.js';
 import organizationRoutes from './routes/organizationRoutes.js';
 import chatRoutes from './routes/chatRoutes.js';
 import roadmapRoutes from './routes/roadmapRoutes.js';
@@ -25,6 +27,11 @@ import feedbackRoutes from './routes/feedbackRoutes.js';
 import passportShareRoutes from './routes/passportShareRoutes.js';
 import resumeRoutes from './routes/resumeRoutes.js';
 import skillEngineRoutes from './routes/skillEngineRoutes.js';
+import adminRoutes from './routes/admin/adminRoutes.js';
+import supportRoutes from './routes/supportRoutes.js';
+import announcementRoutes from './routes/announcementRoutes.js';
+import { requestMetricsMiddleware } from './middleware/requestMetricsMiddleware.js';
+import { maintenanceMiddleware } from './middleware/maintenanceMiddleware.js';
 
 // Validate configuration on startup
 validateConfig();
@@ -34,6 +41,30 @@ try {
   runMigrations();
 } catch (err) {
   console.error('Migration error at startup:', err);
+}
+
+// Ensure demo/seed accounts are always active on startup in demo/dev mode
+if (appConfig.mode === 'demo' || appConfig.env !== 'production') {
+  try {
+    const db = getDb();
+    const info = db.prepare(`
+      UPDATE users 
+      SET status = 'active' 
+      WHERE status = 'suspended' 
+        AND (
+          email LIKE '%@sarathi.%' 
+          OR email LIKE '%@apex.edu' 
+          OR email = 'admin@sarathi.dev'
+          OR role = 'platform_admin'
+          OR id LIKE 'usr-%'
+        );
+    `).run();
+    if (info?.changes > 0) {
+      console.log(`[STARTUP] Re-activated ${info.changes} demo accounts.`);
+    }
+  } catch (err) {
+    console.warn('[STARTUP] Auto-activate demo accounts warning:', err.message);
+  }
 }
 
 const app = express();
@@ -74,6 +105,7 @@ app.use((req, res, next) => {
 });
 
 app.use(express.json({ limit: '5mb' }));
+app.use(requestMetricsMiddleware);
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -82,6 +114,7 @@ app.get('/api/health', (req, res) => {
 
 // Global authentication & tenant context resolution
 app.use(authenticate);
+app.use(maintenanceMiddleware);
 
 // Mount API routes
 app.use('/api/auth', authRoutes);
@@ -99,6 +132,8 @@ app.use('/api/assessments/v2', (req, res, next) => {
 app.use('/api/pipeline', pipelineRoutes);
 app.use('/api/interviews', interviewRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/analytics/college', collegeRoutes);
+app.use('/api/college', collegeRoutes);
 app.use('/api/organization', organizationRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/roadmap', roadmapRoutes);
@@ -109,6 +144,9 @@ app.use('/api/feedback', feedbackRoutes);
 app.use('/api/passport', passportShareRoutes);
 app.use('/api/resumes', resumeRoutes);
 app.use('/api/skills', skillEngineRoutes);
+app.use('/api/support', supportRoutes);
+app.use('/api/announcements', announcementRoutes);
+app.use('/api/admin', adminRoutes);
 
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';

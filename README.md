@@ -1,4 +1,52 @@
-# React + TypeScript + Vite
+# SARATHI — Placement-Readiness Platform
+
+## College & Institutional Portal
+
+### Setup
+
+1. Install dependencies:
+   - Frontend: `npm install`
+   - Backend: `npm --prefix server install`
+2. Migrate + seed the database:
+   - `npm --prefix server run migrate`
+   - `npm --prefix server run seed` (core demo data)
+   - `node server/src/seeder/collegeSeeder.mjs` (Apex Institute: 420 students, 4 branches, 18 drives)
+3. Run:
+   - Backend: `npm run server` (port 4000)
+   - Frontend: `npm run dev:frontend`
+   - Both: `npm run dev`
+
+### College API
+
+All `/api/analytics/college*` endpoints require the `college` (or `platform_admin`) role.
+HODs are server-scoped to their own branch.
+
+- `GET /api/analytics/college?branch=CSE` — KPIs, departments (D-09 suppressed), trends, drives, skill gaps, domains, at-risk count, roster, `lastSyncedAt`.
+- `GET /api/analytics/college/drives?status=upcoming` — list placement drives.
+- `POST /api/analytics/college/drives` — create drive (rate-limited, validated).
+- `PATCH /api/analytics/college/drives/:id` — update drive (audited).
+- `GET /api/analytics/college/drives/:id/eligible` — eligibility engine (branch, min readiness, verified skills, passport).
+- `GET /api/analytics/college/at-risk?benchmark=60` — at-risk students (D-09 enforced).
+- `POST /api/analytics/college/remediation` — assign remediation (audited).
+- `PATCH /api/analytics/college/remediation/:id` — update remediation status (audited).
+- `GET /api/analytics/college/curriculum` — curriculum recommendations.
+- `PATCH /api/analytics/college/curriculum/:id` — accept/plan/dismiss (audited).
+- `GET /api/analytics/college/settings` / `PUT /api/analytics/college/settings` — benchmark, branches, batch year.
+- `GET /api/analytics/college/users` — college Admin/TPO/HOD users.
+
+### Privacy (Rule D-09)
+
+Any aggregate over fewer than 3 candidates is suppressed server-side
+("Insufficient cohort size"), including when branch filters shrink the cohort.
+
+### Tests
+
+- Client: `npm run test:client` (vitest, 96 tests)
+- Server: `npm run test:server` (node:test; includes `collegeD09.test.mjs` + `collegeEligibility.test.mjs`)
+
+---
+
+## Original Template Notes
 
 This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
 

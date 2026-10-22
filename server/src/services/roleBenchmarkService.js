@@ -5,6 +5,8 @@
  * Complies with SARATHI AI Skill Intelligence Engine specifications.
  */
 
+import { initDb } from '../config/db.js';
+
 export const BENCHMARK_VERSION = '2026.1';
 
 export const ROLE_BENCHMARKS = {
@@ -550,14 +552,76 @@ export const ROLE_BENCHMARKS = {
 };
 
 export class RoleBenchmarkService {
+  static _loadBenchmarkFromDb(roleTitle) {
+    if (!roleTitle || typeof roleTitle !== 'string') return null;
+    try {
+      const db = initDb();
+      const cleanTitle = roleTitle.trim();
+      const slug = cleanTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      const roleRow = db.prepare(`
+        SELECT rb.*, d.title as domain_title
+        FROM role_benchmarks rb
+        LEFT JOIN domains d ON rb.domain_id = d.id
+        WHERE LOWER(rb.title) = LOWER(?) OR rb.role_id = ?
+        LIMIT 1;
+      `).get(cleanTitle, slug);
+
+      if (!roleRow) return null;
+
+      const skillsRows = db.prepare(`
+        SELECT rbs.*, s.name as skill_name, s.category
+        FROM role_benchmark_skills rbs
+        LEFT JOIN skills s ON rbs.skill_id = s.id
+        WHERE rbs.benchmark_id = ?
+        ORDER BY rbs.weight DESC;
+      `).all(roleRow.id);
+
+      if (!skillsRows || skillsRows.length === 0) return null;
+
+      return {
+        id: roleRow.id,
+        roleId: roleRow.role_id,
+        roleTitle: roleRow.title,
+        domainId: roleRow.domain_id,
+        domainTitle: roleRow.domain_title || roleRow.domain_id,
+        description: roleRow.description || '',
+        benchmarkVersion: roleRow.benchmark_version,
+        requiredSkills: skillsRows.map(s => {
+          const staticSkill = ROLE_BENCHMARKS[roleRow.title]?.requiredSkills?.find(
+            x => x.skillId === s.skill_id || (s.skill_name && x.skillName.toLowerCase() === s.skill_name.toLowerCase())
+          );
+          const skillName = s.skill_name || staticSkill?.skillName || s.skill_id;
+          return {
+            skillId: s.skill_id,
+            skillName,
+            category: s.category || staticSkill?.category || 'General',
+            requiredProficiency: s.target_level,
+            weight: s.weight,
+            isMandatory: s.is_mandatory === 1,
+            prerequisites: (() => {
+              try { return JSON.parse(s.prerequisites_json || '[]'); } catch { return []; }
+            })(),
+            whyItMatters: s.why_it_matters || staticSkill?.whyItMatters || ''
+          };
+        })
+      };
+    } catch {
+      return null;
+    }
+  }
+
   /**
    * Retrieves canonical role benchmark definition.
-   * Falls back gracefully to Full-Stack Developer if role not directly configured.
+   * Checks database first, falls back gracefully to static benchmarks.
    */
   static getRoleBenchmark(roleTitle) {
     if (!roleTitle || typeof roleTitle !== 'string') {
-      return ROLE_BENCHMARKS['Full-Stack Developer'];
+      const dbDefault = this._loadBenchmarkFromDb('Full-Stack Developer');
+      return dbDefault || ROLE_BENCHMARKS['Full-Stack Developer'];
     }
+
+    const fromDb = this._loadBenchmarkFromDb(roleTitle);
+    if (fromDb) return fromDb;
 
     const cleanTitle = roleTitle.trim();
     if (ROLE_BENCHMARKS[cleanTitle]) {
@@ -573,22 +637,40 @@ export class RoleBenchmarkService {
     }
 
     // Role aliases
-    if (lower.includes('frontend') || lower.includes('front-end')) return ROLE_BENCHMARKS['Frontend Developer'];
-    if (lower.includes('backend') || lower.includes('back-end')) return ROLE_BENCHMARKS['Backend Developer'];
-    if (lower.includes('react')) return ROLE_BENCHMARKS['React Developer'];
-    if (lower.includes('machine learning') || lower === 'ml') return ROLE_BENCHMARKS['Machine Learning Engineer'];
-    if (lower.includes('ai') || lower.includes('artificial intelligence')) return ROLE_BENCHMARKS['AI/ML Engineer'];
-    if (lower.includes('cyber') || lower.includes('security')) return ROLE_BENCHMARKS['Cybersecurity Analyst'];
-    if (lower.includes('data')) return ROLE_BENCHMARKS['Data Analyst'];
+    if (lower.includes('frontend') || lower.includes('front-end')) return this.getRoleBenchmark('Frontend Developer');
+    if (lower.includes('backend') || lower.includes('back-end')) return this.getRoleBenchmark('Backend Developer');
+    if (lower.includes('react')) return this.getRoleBenchmark('React Developer');
+    if (lower.includes('machine learning') || lower === 'ml') return this.getRoleBenchmark('Machine Learning Engineer');
+    if (lower.includes('ai') || lower.includes('artificial intelligence')) return this.getRoleBenchmark('AI/ML Engineer');
+    if (lower.includes('cyber') || lower.includes('security')) return this.getRoleBenchmark('Cybersecurity Analyst');
+    if (lower.includes('data')) return this.getRoleBenchmark('Data Analyst');
 
     return ROLE_BENCHMARKS['Full-Stack Developer'];
   }
 
   static getAllBenchmarks() {
+    try {
+      const db = initDb();
+      const rows = db.prepare('SELECT title FROM role_benchmarks;').all();
+      if (rows && rows.length > 0) {
+        return rows.map(r => this.getRoleBenchmark(r.title)).filter(Boolean);
+      }
+    } catch {
+      // fallback
+    }
     return Object.values(ROLE_BENCHMARKS);
   }
 
   static getAvailableRoles() {
+    try {
+      const db = initDb();
+      const rows = db.prepare('SELECT title FROM role_benchmarks;').all();
+      if (rows && rows.length > 0) {
+        return rows.map(r => r.title);
+      }
+    } catch {
+      // fallback
+    }
     return Object.keys(ROLE_BENCHMARKS);
   }
 }
